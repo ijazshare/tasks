@@ -51,9 +51,14 @@ import io.github.ijazshare.tasks.data.Export
 import io.github.ijazshare.tasks.data.INBOX_ID
 import io.github.ijazshare.tasks.data.Repository
 import io.github.ijazshare.tasks.data.TasksDb
+import io.github.ijazshare.tasks.parse.CommandHandler
+import io.github.ijazshare.tasks.parse.RoomStore
 import io.github.ijazshare.tasks.reminders.Notifications.EXTRA_MISSED
 import io.github.ijazshare.tasks.reminders.Notifications.EXTRA_TASK
+import io.github.ijazshare.tasks.ui.ConsoleScreen
+import io.github.ijazshare.tasks.ui.HAS_CONSOLE
 import io.github.ijazshare.tasks.ui.NEW_TASK
+import io.github.ijazshare.tasks.ui.QuickAddBar
 import io.github.ijazshare.tasks.ui.SetupScreen
 import io.github.ijazshare.tasks.ui.SetupState
 import io.github.ijazshare.tasks.ui.TagFilter
@@ -102,6 +107,7 @@ private const val MISSED_TITLE = "Missed"
 private const val CLOCK_POLL_MS = 60_000L
 
 @Composable
+@Suppress("ComplexCondition")
 private fun TasksApp(openTask: androidx.compose.runtime.MutableState<Launch?>, resumes: Int) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -109,6 +115,9 @@ private fun TasksApp(openTask: androidx.compose.runtime.MutableState<Launch?>, r
     var tab by rememberSaveable { mutableIntStateOf(0) }
     var sheet by rememberSaveable { mutableStateOf<String?>(null) }
     var setup by rememberSaveable { mutableStateOf(false) }
+    var console by rememberSaveable { mutableStateOf(false) }
+    val store = remember { RoomStore(context, repo) }
+    val handler = remember { CommandHandler(store) }
     val today by produceState(LocalDate.now(), resumes) {
         while (true) {
             value = LocalDate.now()
@@ -204,6 +213,7 @@ private fun TasksApp(openTask: androidx.compose.runtime.MutableState<Launch?>, r
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Text(
                     when {
+                        console -> "Console"
                         setup -> "Setup"
                         showMissed -> MISSED_TITLE
                         else -> tabs[tab]
@@ -213,6 +223,11 @@ private fun TasksApp(openTask: androidx.compose.runtime.MutableState<Launch?>, r
                 )
                 if (missed.isNotEmpty() && !showMissed) {
                     TextButton(onClick = { showMissed = true }) { Text("$MISSED_TITLE (${missed.size})") }
+                }
+                if (HAS_CONSOLE) {
+                    TextButton(onClick = {
+                        console = !console
+                    }) { Text(if (console) "Back" else "Console") }
                 }
                 TextButton(onClick = { setup = !setup }) { Text(if (setup) "Back" else "Setup") }
                 // Settings will own the export in a later milestone; until then it lives in the header.
@@ -225,11 +240,16 @@ private fun TasksApp(openTask: androidx.compose.runtime.MutableState<Launch?>, r
                     modifier = Modifier.fillMaxWidth().clickable { setup = true }.padding(vertical = 12.dp),
                 )
             }
-            if (!setup && !showMissed && tab <= 2) {
+            if (!setup && !console) {
+                QuickAddBar(handler, projects.map { it.name }, labels.map { it.name })
+            }
+            if (!setup && !showMissed && !console && tab <= 2) {
                 TagFilter(labels, filter) { id -> filter = if (id in filter) filter - id else filter + id }
             }
             Box(Modifier.fillMaxSize()) {
                 when {
+                    console -> ConsoleScreen(store)
+
                     setup -> SetupScreen(resumes)
 
                     showMissed -> TaskListScreen(missed, "Nothing missed.", next, open, done)

@@ -7,6 +7,8 @@
  * Software Foundation, either version 3 of the License, or (at your option) any
  * later version. See the LICENSE file in the project root for the full text.
  */
+@file:Suppress("ktlint:standard:max-line-length", "MaxLineLength")
+
 package io.github.ijazshare.tasks.data
 
 import androidx.room.Dao
@@ -60,6 +62,21 @@ interface TasksDao {
             "ORDER BY missedAt DESC",
     )
     fun missed(): Flow<List<Task>>
+
+    /** Every open task, for the command handler's matching. */
+    @Query(
+        "SELECT * FROM task WHERE completedAt IS NULL AND deletedAt IS NULL ORDER BY dueDate IS NULL, dueDate, dueTime, createdAt",
+    )
+    suspend fun openTasks(): List<Task>
+
+    @Query("SELECT * FROM section WHERE deletedAt IS NULL")
+    suspend fun sections(): List<Section>
+
+    @Query("SELECT * FROM label WHERE nameKey = :key AND deletedAt IS NULL")
+    suspend fun labelByKey(key: String): Label?
+
+    @Query("SELECT COALESCE(MAX(sortOrder), 0) + 1 FROM label")
+    suspend fun nextLabelOrder(): Int
 
     @Query("SELECT * FROM label WHERE deletedAt IS NULL ORDER BY sortOrder, nameKey")
     fun labels(): Flow<List<Label>>
