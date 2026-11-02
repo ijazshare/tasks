@@ -1,0 +1,206 @@
+[
+ {
+  "section": "8.3 night rule vs 13.1 seed 27",
+  "problem": "Seed 27 says 'every day at 1:30' at 23:50 returns done with a first due of 01:30. Rule 8.3 says a bare hour whose nearest future occurrence falls between 00:00 and 06:59 must ask 'morning or evening?'. 01:30 is the nearest future, so the rule forces a question. The seed contradicts it. The night rule also never says how it applies to recurring phrases or to 'at 1:30' with minutes.",
+  "fix": "Either change seed 27 to 'at 1:30 am', or state that the night rule applies to every bare hour including recurrence and make seed 27 a needs_input case. Add a DST seed that uses an explicit am.",
+  "severity": "major"
+ },
+ {
+  "section": "6.1 step 5 vs 13.1 seed 17",
+  "problem": "The task-match rule accepts a task when it scores at least 0.8 and leads the runner-up by at least 0.15, using an undefined 'token-set similarity'. Seed 17 ('mark call Amira as done' with open tasks 'Call Amira' and 'Call Amira's dentist') expects a question. Under Jaccard the exact title scores 1.0 against about 0.4, so it auto-completes. Under a subset-style token-set ratio both score 1.0 and it asks. The spec's own rule and its seed disagree, depending on a metric nobody defined.",
+  "fix": "Define the similarity function exactly (formula, tokenisation, handling of possessives such as \"Amira's\") and pick thresholds that reproduce seed 17, or state that an exact normalised-title match wins.",
+  "severity": "major"
+ },
+ {
+  "section": "8.5 last bullet vs 8.2",
+  "problem": "8.5 says 'Delete or complete applies to the whole series'. 8.2 says completing a recurring task writes a completion_log row and advances to the next occurrence. The series continues, so these are opposite behaviours. 'Delete applies to the series' is also never confirmed, and the 4.7 line that lists the question as 'never asked' sits under a heading that claims to be the complete list of questions.",
+  "fix": "Reword to: complete advances one occurrence, delete removes the series (undoable). Move the 'never asked' line out of the question list.",
+  "severity": "major"
+ },
+ {
+  "section": "6.7, 15 Q9, 12 vs 2/12 'no INTERNET'",
+  "problem": "Q9 and 6.7 offer 'download its own copy' of the GGUF in Tasks. That needs network access in the core app, which contradicts 'no INTERNET permission' and the CI manifest check. The alternative, handing weights over a ParcelFileDescriptor, needs a second AIDL method, but 4.1 and 4.3 promise a single-method interface. It also adds model-serving code to Assistant, which cuts against 'lean Assistant'.",
+  "fix": "Remove the download option, or route it through the optional connector. If FD sharing stays, show the extra AIDL method and the Assistant-side change in 4.12. Otherwise declare M6 out of scope.",
+  "severity": "major"
+ },
+ {
+  "section": "4.12 step 4 and 7",
+  "problem": "The `tasks` tool takes no parameters, and `create_reminder` is removed. Step 7 says that when Tasks is not installed the `tasks` tool 'falls back to legacy ReminderStore.create'. With no arguments there is no title or time to create from. Making the legacy path work means Assistant keeps task parsing, which breaks 'Assistant gains no task logic'. The legacy code also lives two releases.",
+  "fix": "Decide: either the fallback just speaks 'Install Tasks' (and the old reminder path is removed at once), or keep `create_reminder` alongside and say so. Remove the 'falls back' claim otherwise.",
+  "severity": "major"
+ },
+ {
+  "section": "4.11 vs 4.12 step 3 and 4",
+  "problem": "Intents marked must (delete, reschedule or snooze, 'I've paid the gas bill', 'what do I have tomorrow', 'push that to tomorrow', set priority) are not claimed by `TaskRouting.claims`. The `tasks` tool description lists only 'remind me, add to my list, what is due, mark done', so the 1B router will rarely pick it. Seeds 18 ('delete the gym task'), 22 ('priority one call the insurer\u2026') and 26 ('Okay brain dump\u2026', which starts with 'Okay') are likewise unclaimed. The 6.1 intent grammar has no frame for 'I've paid', 'tick off', 'finished', 'snooze', or 'my tasks'/'to-do' (claimed by the pre-route but unmatched in Tasks, which falls back to the router, then to 'I cannot do that yet').",
+  "fix": "Give an explicit list of claim patterns that matches every must intent and every seed, and a tool description covering them. Say how much routing code Assistant is allowed. Keep the intent grammar and TaskRouting in sync via a shared fixture of claimed phrases. Strip a leading 'okay/ok' before claiming.",
+  "severity": "major"
+ },
+ {
+  "section": "4.12 intro vs steps 1-9, 4.13",
+  "problem": "'About 300 added lines' and 'Assistant does not gain task parsing' do not survive the list. Assistant gains a keyword pre-route with task-shaped regexes, an undo regex plus token state, a FollowUp state and chips, a long-capture profile, a legacy fallback, migration (parse tasks.md, sha256 ids, strip the due text, rename the file, cancel alarms, forward 'complete_by_legacy_id'), a status handshake, a Settings button and an AIDL copy. The 'strip the due text' step is task-format logic. It is also well over 300 lines.",
+  "fix": "Re-estimate honestly, or move more into Tasks. For example, send raw tasks.md lines and let Tasks parse them (Assistant sends lines only). Cap Assistant to a stated list of files and lines.",
+  "severity": "major"
+ },
+ {
+  "section": "4.12 (omission)",
+  "problem": "Assistant needs the AIDL file to call the service (a copy of ITaskCommand.aidl, `buildFeatures { aidl = true }`, same package name) and the target component class name. None of this is listed. `prewarm()` binds, but nothing says when it unbinds, so Tasks' process stays alive or leaks the connection.",
+  "fix": "Add the AIDL copy and Gradle flag to 4.12, define the explicit component name, and specify the unbind lifecycle (on session end or an idle timeout).",
+  "severity": "minor"
+ },
+ {
+  "section": "8.4 on-fire rule vs goal 3 and 8.1",
+  "problem": "The fire handler selects every reminder with next_fire_at \u2264 now + 30 s. That fires reminders up to 30 s early, which contradicts 'fire on time', the 'not rounded' 'in N minutes' instant (seed 2: 14:22:59.4), and 'never lie'. The task due is stored as a minute-precision LocalTime while the alarm instant has seconds and milliseconds. Nothing says when the task becomes overdue (14:22:00 or 14:22:59).",
+  "fix": "Fire only reminders with next_fire_at \u2264 now (allow a small clock tolerance for the alarm itself, stated as such). Define how an AT_INSTANT reminder maps to due_time (truncate, and show the display minute).",
+  "severity": "major"
+ },
+ {
+  "section": "8.3 / 6.1 (past times today)",
+  "problem": "The spec covers a past explicit date ('3 October') and a bare hour, but not an explicit time already passed today ('remind me at 1pm' at 14:03, '9am' at 14:03 for a one-off). Rolling to tomorrow silently is a guess. Creating a past reminder gives an instant 'missed'. Recurring rules say 'next one counts', but one-offs have no rule.",
+  "fix": "Add a row to 8.3: an explicit past time today must ask 'That's passed. Tomorrow at 1 pm?' (expects confirm). Add seeds.",
+  "severity": "major"
+ },
+ {
+  "section": "13.1 seeds 13 and 19 / 4.7",
+  "problem": "'Remind me on the 31st of every month to pay rent' and the follow-up 'the sixth' both end with 'reminder none (no time)'. The user said 'remind me' and gets no reminder. The spec says 'When should I remind you?' only when there is no time and no date. With a date but no time the behaviour is only implied, and a silent no-alert reminder breaks goal 3. Whether the speech says 'no reminder set' is unspecified.",
+  "fix": "Rule: a 'remind me' with a date but no time must ask for a time, or save it all-day and say 'no alert'. Pick one, and say whether there is a default all-day reminder time (the 'default reminder for timed tasks' setting covers only timed tasks).",
+  "severity": "major"
+ },
+ {
+  "section": "8.3 'bare at 5', named times, 'the 5th'",
+  "problem": "Several rules pick an answer without the user saying it: bare 'at 5' resolves to the nearest of 05:00 or 17:00 (a pm guess for any hour outside the night window), 'morning/afternoon/evening/tonight' map to 09:00/14:00/19:00/20:00, 'every other week' defaults to the first due date's weekday (never defined when no date is given), and 'the 5th said on the 5th' gives today or next month while a bare weekday on its own day gives next week. These are readbacks of guesses, not facts, and they are inconsistent with each other. Goal 4 forbids inventing a time.",
+  "fix": "Either list these as owner-approved defaults with explicit decline or ask alternatives (Q4 covers only part of them), or ask each time. Align the same-day semantics for weekday and month-day.",
+  "severity": "major"
+ },
+ {
+  "section": "4.4 vs section 10 and 4.2.3",
+  "problem": "context.source is 'voice|typed' and routed_by is 'keyword|model'. Section 10 sends source: 'notification' and 'email', and routed_by: 'connector'. The type enum lacks complete_by_legacy_id (4.13 step 5), and the migrate request's 'items' field is outside the 4.4 field table. The connector's package ids in the allowlist are never defined. Request/response needs a title and description field for email subject and body, but 'utterance' is the only text field.",
+  "fix": "Extend the enums and the field table (source, routed_by, type, items, legacy_id, description/body). Define the connector's ids. Say how a connector carries description separately from the quick-add text.",
+  "severity": "major"
+ },
+ {
+  "section": "4.5 / 4.3 response schema",
+  "problem": "Undefined fields: the full set of effects[].op values (created, updated, completed, deleted, rescheduled, queried, ramble_drafted, migrated, undone?), the shape of effects[].recurrence, the structure of display, the structure of warnings ('code' and 'fix' only in prose) and error (message?), where 'truncated' lives, the response to cancel, status and complete_by_legacy_id, what `done` returns for a query (items?), and when open_uri is set. The ramble flow has no `expects` for 'start a brain dump' with no content.",
+  "fix": "Add a complete schema table or JSON Schema per type with enumerated values, and publish it as the contract/v1 fixtures before M3.",
+  "severity": "major"
+ },
+ {
+  "section": "4.13 migration",
+  "problem": "(1) Response effects list every legacy_id to task_id, but responses are capped at 64 KiB and lists are truncated, while step 4 cancels alarms 'for every migrated id'. A truncated mapping leaves live legacy alarms. (2) Request size over the 1 MB binder limit is not handled (batching). (3) Hand-written lines with a '\u2014 due' text but no comment import undated, so human-readable dates are lost and 'loses no data' (goal 7) fails. `raw` is sent but no column stores it. (4) Other content in tasks.md (headings, notes) disappears from the live file when it is renamed.",
+  "fix": "Define chunked migrate with an idempotent 'done' summary instead of a mapping, or have Tasks return only ids that failed. Store `raw` (for example in description or source_utterance). Parse the visible due text or flag it needs-review. Say what Assistant does with non-task lines.",
+  "severity": "major"
+ },
+ {
+  "section": "4.7 / 4.4 (follow-up semantics)",
+  "problem": "For 'in 20 minutes' with a missing title (seed 15), the answer arrives later, but the spec does not say whether the instant is frozen at the original speech_end or recomputed. conversation.expires_epoch_ms in the 4.5 example is 120 s after now, while the text says TTL 90 s, and nothing says whether each round resets it. A follow-up that is really a new command ('what's the weather') is eaten as a bad answer until round 2 (no escape other than 'cancel'). Concurrent conversations, an answer for a different `expects` ('Friday' answering a time question), and answers that are themselves ambiguous ('next Friday') are undefined.",
+  "fix": "State: draft stores the original speech_end and instants; TTL per round; one live conversation per client (a new utterance cancels it); and a rule for answers that fail to match `expects` but look like a new command.",
+  "severity": "minor"
+ },
+ {
+  "section": "4.7 / 4.9 / 4.10 retry",
+  "problem": "Client timeout 1,500 ms plus one retry plus the 1,000 ms hard deadline can reach about 3.5 s, past the 3 s end-of-speech budget. A retry that arrives while the first call is still running (in-flight dedupe) is undefined. It is also unsaid whether error responses (`busy`) are cached by request_id, so the retry would return the cached 'busy'. 'Aborts before commit' is racy if the deadline fires during the Room commit.",
+  "fix": "Define in-flight dedupe, never cache error responses, and make the commit atomic with a check-then-commit under the dispatcher. Set the retry budget so the worst case stays within the stated latency.",
+  "severity": "minor"
+ },
+ {
+  "section": "4.8 undo",
+  "problem": "Only Assistant's last token is held, so a second command makes the earlier undo unreachable (not stated). Undo after the user edited the same task in the UI, or after purge/import, has no conflict rule. 'Undo' regex 'cancel that' collides with Assistant's own cancel flows. Assistant process death loses the token. The 5 s snackbar and the 10 min token share one journal but have no stated precedence.",
+  "fix": "State the single-token limit, conflict policy (refuse with a spoken reason if the target changed), and the exact regex precedence against Assistant's own commands.",
+  "severity": "minor"
+ },
+ {
+  "section": "6.1 / 6.5 (ambiguity cues)",
+  "problem": "Self-correction cues 'actually', 'sorry', 'I mean' trigger a question inside ordinary titles ('say sorry to Amira', 'actually call the dentist'), and there are no 'two readings' to offer when the cue is just in a title. Verb detection for 'no_verb' and merge-back needs a verb lexicon, which is not specified or sourced. 'Then' is split only before an imperative verb, with the same dependency. Under-split behaviour with no punctuation (research: Whisper base.en omits periods) has no rule such as research's 'when unsure keep as one task and show it'; a long no-cue run becomes one huge title (no max title length).",
+  "fix": "Restrict cues to positions or patterns where an earlier value exists, and fall through to title text otherwise. Ship a verb list, a title length cap with a flag, and the 'when unsure, one draft, flagged' policy from parsing.md.",
+  "severity": "major"
+ },
+ {
+  "section": "4.12 step 8 / 6.5",
+  "problem": "Ramble capture is circular: Assistant would use the long endpointing profile (120 s cap, 2.5 s trailing silence) for 'brain dump', but it only knows the utterance is a brain dump after transcribing the short capture. Seed 26 ('Okay brain dump. Call the garage\u2026') is a single utterance with the content already inside it. Whether 'start a brain dump' alone leads to a second long capture (and via which response `status`/`expects`) is not specified. Long-audio Whisper time on base.en (120 s) against any budget is not specified, and the research gives no support for the quality at that length. Drafts also have no retention or purge, and a denied POST_NOTIFICATIONS silently strands the review.",
+  "fix": "Specify the two-step flow (frame-only utterance returns needs_input with expects='ramble', then the long capture is sent as type 'ramble'), the Whisper time budget, ramble retention, and a fallback when notifications are off (warning in speech).",
+  "severity": "major"
+ },
+ {
+  "section": "6.5 step 7 'never drop words'",
+  "problem": "Step 1 drops the leading frame and step 5 drops filler fragments, yet step 7 says every character is in a draft or in a dropped filler span. The frame drop is a third category. Also, 'Tomorrow morning.' attached backwards (seed 26) assumes the previous sentence is the right owner; the research warns it is only a heuristic (and 'distributed modifiers' are flagged, but 'orphan modifier' attach is applied silently, not asked).",
+  "fix": "Add 'frame' spans to the accounting. Flag attached_modifier drafts as needing review (already flagged) and say they can't be 'Save all kept' without confirmation.",
+  "severity": "minor"
+ },
+ {
+  "section": "8.1 vs 6.1 slot grammars",
+  "problem": "8.1 says an explicit zone ('at 3 London time') makes a fixed time, but the slot grammar in 6.1 has no zone slot and no list of recognised zone names or city-to-IANA mappings. 8.1 also says 'in N days... keep the current wall time only when a time is also spoken', which is self-contradictory (it should say: the spoken time is used, otherwise all-day). 'end of the month', 'in a few minutes', 'later', 'soon', 'in a couple of hours' have no stated outcome (should be decline).",
+  "fix": "Add a zone slot with a small closed list, fix the wording, and add vague-quantity phrases to the decline list with seeds.",
+  "severity": "minor"
+ },
+ {
+  "section": "8.2 / 8.4 / 5 reminder table",
+  "problem": "Reminder semantics are underspecified: how snooze interacts with the last_fired_at guard and recurrence, how reminders attach to recurring tasks (reminder table has no recurrence, so AT_LOCAL and AT_INSTANT combined with recurrence are undefined), what 'push that to tomorrow' does for a recurring or timed task (keep the time? stay on the rule?), whether 'add X to my list at 5' creates a reminder, and what 'move X to Thursday' does with an existing time. Completion_log schema is literally truncated ('due_time\u2026'). Row ordering by 'order' column and the unique lower(name) index are not realisable in Room without a COLLATE NOCASE or extra column.",
+  "fix": "Complete the schema (explicit columns, types), write a table of reschedule/snooze/complete outcomes by task shape, and fix the index definition.",
+  "severity": "minor"
+ },
+ {
+  "section": "8.4 permissions and delivery",
+  "problem": "USE_EXACT_ALARM is granted at install and not user-revocable, so the 'exact_alarm_denied' warning, the SCHEDULE_EXACT_ALARM fallback and the 'permission state changed' receiver are mostly moot. No handling is described for OEM battery managers (One UI 'sleeping apps', restricted standby bucket), which parsing.md names as a risk, and for credential-encrypted storage before first unlock (Room unreadable at BOOT_COMPLETED, so reminders due before first unlock). After force-stop, alarms are gone until the next open or bind, so a reminder can be hours late, which sits badly with goal 3 ('fire on time').",
+  "fix": "Say which of these are supported, add LOCKED_BOOT/direct-boot handling or accept and document the gap, add an onboarding step for battery exemption, and word goal 3 to name the force-stop exception.",
+  "severity": "major"
+ },
+ {
+  "section": "11 Todoist import",
+  "problem": "The idempotence claim ('re-import updates rather than duplicates') relies on import_map external_id, but the CSV columns the spec lists contain no ids, so file import has nothing stable to key on. The 'Mapping rules (both paths)' table covers fields the CSV list lacks (labels, reminders, parent_id, section_id, completed) and omits what it has (INDENT, TYPE). The 'update' behaviour against local edits and local completions is undefined. Undo for the import vs the 10 min token is unclear.",
+  "fix": "Define a synthetic key (hash of project, position and content) for CSV, split the mapping table per path, and state a re-import conflict rule (skip locally modified tasks).",
+  "severity": "major"
+ },
+ {
+  "section": "10 email, options B and C",
+  "problem": "Option B has Assistant read mail-notification text and forward it as an 'utterance'. That is not the user's own words, it adds Assistant code, and it parses third-party text through the date grammar (guessing risk, no review step stated for it). Option C's connector sends quick-add text as an utterance, with no stated way to carry the body or message-id for de-duplication, and no failure cases (auth failure, duplicate mail, mailbox offline, token revocation). Whether the connector's declared INTERNET permission and the Tasks permission design satisfy 'clearly separated' is fine in principle, but connector signing and install-order are unspecified.",
+  "fix": "Mark B as needing the owner's approval since it changes Assistant. Add message-id, body and error cases to the contract for the connector, and say email-derived tasks always land in a review list.",
+  "severity": "minor"
+ },
+ {
+  "section": "4.2 security",
+  "problem": "Several claims are unsupported by the research notes: that declaring the same signature permission in both apps 'removes install-order problems', and that SIGNATURE_MATCH via checkSignatures is enough when several packages share a UID. Release signing (key location, backup, the connector's key) is not defined, and 4.2.5 makes 'same debug keystore' a MUST while Q15 asks whether it is acceptable. Debug keystore sharing across other machines or CI is not addressed, so a CI-built debug Tasks and a local debug Assistant fail with 'different key'.",
+  "fix": "Source or soften the claims. Add a signing section (release keystore under assistant-dev, never committed), resolve Q15 before M3, and resolve getPackagesForUid for the caller check.",
+  "severity": "minor"
+ },
+ {
+  "section": "7 and 11 (research support)",
+  "problem": "Several claims are not in the research notes and are not marked \u2020: that tapping a chip un-parses it ('Todoist's own escape hatch'), `every!` completion-anchored recurrence syntax, that the Todoist backup zip holds per-project CSV in template format (research documents only /templates/file per project and a backups list), that completed tasks are not returned by sync, the CSV column list ('from memory', correctly flagged, but then the mapping table treats it as fact), and Todoist's CSV priority numbering (flagged verify). The research file parsing.md itself says it was 'written from prior knowledge, no live web access', and the spec builds on its licences, versions and rule counts without re-checking them.",
+  "fix": "Mark these \u2020 or 'verify before coding', and add a pre-M2 and pre-M5 task to confirm them against a real export and live docs.",
+  "severity": "minor"
+ },
+ {
+  "section": "6.7 / 4.10 / 4.2 / 8.4 (unsourced numbers)",
+  "problem": "Figures that the research does not support: '0.9 GB' for the Gemma 1B weights (research says about 0.5-0.8 GB at Q4), 'Gemma 3 1B QAT Q4_0', 'most task commands skip the model, saving 0.5-1 s', 'about a third of real summons are noise', Assistant's 'locked decision 8', 'S26-class phone' latency targets (p50 50 ms, p95 150 ms), and that USE_EXACT_ALARM suits a sideloaded reminder app (research says 'verify'). They come from Assistant's code or notes, not the research folder.",
+  "fix": "Cite the Assistant file or bench for each, or mark them as assumptions to measure in M0 or M1.",
+  "severity": "minor"
+ },
+ {
+  "section": "4.5 / 4.7 vs 6.1 EntityResolver",
+  "problem": "Missing error cases: an unknown label or section name has no stated outcome (the create-or-Inbox question covers only projects; 'labels are never created unless explicit' has no explicit intent defined in 4.11). 'Create it' after a question creates a project from speech, which needs to be stated as the one allowed exception to 'never invent a project'. 'It/that' after a query that listed several items, or after a not_mine, or after 10 min, has no stated question or expects value. Referent storage (memory vs Room, debug/release clients) is unspecified. 'Which one' with 3 options says nothing for 4+ equally good matches or for an empty open-task set.",
+  "fix": "Add the missing questions and expects values to the 4.7 list and make it genuinely complete, or drop the word 'complete'.",
+  "severity": "minor"
+ },
+ {
+  "section": "14 M3 vs M4 / 13.1",
+  "problem": "M3 'Done when: all 28 seed cases pass by voice or typed through Assistant', but seed 26 is the ramble case, which M4 owns, and ramble needs the Assistant long-capture change from M4. M2's check that the seed table is green precedes the IPC; seeds 18, 22 and 26 depend on routing that 4.12 does not claim (see routing gap).",
+  "fix": "Make M3 'all seeds except 26' and move 26 to M4, or move ramble IPC into M3.",
+  "severity": "minor"
+ },
+ {
+  "section": "13.1 sources / privacy",
+  "problem": "The golden corpus is seeded from Assistant's real query log ('with names replaced'). Replacing names does not cover phone numbers, addresses or other personal data, and the owner's rule is never to commit their number. `task.source_utterance` and request/utterance logs persist raw speech text, but 'clear utterance log' does not clear source_utterance, and the JSON export 'minus logs' still includes it. No retention limit is stated for utterance_log. Audio never leaves the phone in this design and the contract carries text only, which is consistent with the decisions.",
+  "fix": "Require a scrub step and a review before any real-log case is committed, add retention (for example 30 days) for utterance_log, and make export and 'clear history' treat source_utterance consistently.",
+  "severity": "minor"
+ },
+ {
+  "section": "13.4 contract fixtures",
+  "problem": "'A breaking change fails a test in both repos' is overstated: Assistant vendors a manual copy of the fixtures, so drift is not detected until someone re-copies. Two hand-mirrored sets of data classes also drift.",
+  "fix": "Add a sync script or a CI hash check of the vendored directory, and name who re-copies on contract change.",
+  "severity": "minor"
+ },
+ {
+  "section": "1 Goals vs 7 feature table",
+  "problem": "Goal 1 lists projects, sections and subtasks as basics, but section 7 marks sections 'should', subtasks 'should', and nesting 'should', with voice unable to create subtasks. The 4.11 'set priority / move / add label' rows are 'should' while seed 22 and 15 rely on priority parsing.",
+  "fix": "Align the goal text with the must/should list.",
+  "severity": "minor"
+ }
+]

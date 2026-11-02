@@ -1,0 +1,32 @@
+Todoist versionName: v12324
+com.todoist/.QuickAddItemAsTask <- android.intent.action.SEND, text, text/plain
+com.todoist/.activity.AddAsNoteActivity <- android.intent.action.SEND, application, application/*, audio, audio/*, image, image/*, text, text/*
+com.todoist/.activity.AddFileAsItemProxyActivity <- android.intent.action.SEND, application, application/*, audio, audio/*, image, image/*
+com.todoist/.activity.QuickAddItemActivity <- android.intent.action.MAIN
+com.todoist/.activity.RouterActivity <- https, todoist
+com.todoist/.activity.SettingsActivity <- android.intent.action.MAIN
+com.todoist/.activity.WelcomeActivity <- android.appwidget.action.APPWIDGET_CONFIGURE
+com.todoist/.activity.dialog.CreateQuickAddDialogShortcutActivity <- android.intent.action.CREATE_SHORTCUT
+com.todoist/.activity.dialog.CreateRambleShortcutActivity <- android.intent.action.CREATE_SHORTCUT
+com.todoist/.alias.HomeActivityBlueberry <- android.intent.action.MAIN
+com.todoist/.alias.HomeActivityDark <- android.intent.action.MAIN
+com.todoist/.alias.HomeActivityDefault <- android.intent.action.MAIN
+com.todoist/.alias.HomeActivityGold <- android.intent.action.MAIN
+com.todoist/.alias.HomeActivityKale <- android.intent.action.MAIN
+com.todoist/.alias.HomeActivityLavender <- android.intent.action.MAIN
+com.todoist/.alias.HomeActivityLightRainbow <- android.intent.action.MAIN
+com.todoist/.alias.HomeActivityMoonstone <- android.intent.action.MAIN
+com.todoist/.alias.HomeActivityRaspberry <- android.intent.action.MAIN
+com.todoist/.alias.HomeActivityTangerine <- android.intent.action.MAIN
+com.todoist/.alias.HomeActivityTodoist <- android.intent.action.MAIN
+com.todoist/.appwidget.activity.ItemListAppWidgetSettingsActivity <- android.appwidget.action.APPWIDGET_CONFIGURE
+com.todoist/.appwidget.activity.ProductivityAppWidgetSettingsActivity <- android.appwidget.action.APPWIDGET_CONFIGURE
+com.todoist/.appwidget.activity.QuickActionsAppWidgetSettingsActivity <- android.appwidget.action.APPWIDGET_CONFIGURE
+com.todoist/com.facebook.CustomTabActivity <- fbconnect
+com.todoist/com.google.firebase.auth.internal.GenericIdpActivity <- genericidp
+com.todoist/com.google.firebase.auth.internal.RecaptchaActivity <- recaptcha
+com.todoist/net.openid.appauth.RedirectUriReceiverActivity <- https
+
+schemes: ['application', 'audio', 'com.todoist.intent.auth.welcome', 'fbconnect', 'genericidp', 'https', 'image', 'recaptcha', 'text', 'todoist']
+providers: ['com.todoist/.slices.AppSliceProvider', 'com.todoist/androidx.core.content.FileProvider', 'com.todoist/androidx.startup.InitializationProvider', 'com.todoist/com.datadog.android.rum.DdRumContentProvider', 'com.todoist/com.facebook.internal.FacebookInitProvider', 'com.todoist/com.google.firebase.provider.FirebaseInitProvider', 'com.todoist/com.squareup.picasso.PicassoProvider']
+services: ['com.todoist/.pushnotifications.FcmListenerService', 'com.todoist/.quicksettings.CreateItemTileService', 'com.todoist/.quicksettings.RambleTileService', 'com.todoist/com.google.firebase.messaging.FirebaseMessagingService', 'com.todoist/com.iterable.iterableapi.IterableFirebaseMessagingService']
