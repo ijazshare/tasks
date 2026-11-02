@@ -89,7 +89,7 @@ before the milestone that depends on it (section 14, "verification gates").
 | Time storage | Local date + local time + optional zone ID + RRULE subset, never a bare UTC instant, except "in N minutes", which is an instant |
 | Alarms | One exact "next due" alarm. Re-armed on every change, boot, time or zone change, package replace and process start |
 | Network | None in the core app (no `INTERNET` permission). Email, Todoist API and future homelab GPU ramble offloading live in the optional separate connector app (Q7, 6.7). Tasks never downloads anything. Anything that leaves the phone obeys goal 7 |
-| Follow-ups | At most 2 questions per command. This is Tasks' own limit, not Assistant's. Locked decision 8 (`themachine/CLAUDE.md`, as of main 37e7bb4) reads: "there is no general slot-filling loop. Three follow-ups exist. "Text Sam" with no message asks "What should I say to Sam?" and the next dictation (within 60 s) is the message; a reply that opens like an order is read back for a yes (30 s) instead of being sent. A reminder with neither a task nor a time asks "What should I remind you about?" and the answer (within 60 s) is added to the request and run as one command. A name that matches several contacts shows a contact selector. Anything else that is missing fails with a spoken reason." The task follow-up (4.7, 4.12 step 5e) replaces the reminder one and can ask twice, so decision 8 needs the owner's yes and a CLAUDE.md edit in the same Assistant change |
+| Follow-ups | At most 4 questions per command. This is Tasks' own limit, not Assistant's. Locked decision 8 (`themachine/CLAUDE.md`, as of main 37e7bb4) reads: "there is no general slot-filling loop. Three follow-ups exist. "Text Sam" with no message asks "What should I say to Sam?" and the next dictation (within 60 s) is the message; a reply that opens like an order is read back for a yes (30 s) instead of being sent. A reminder with neither a task nor a time asks "What should I remind you about?" and the answer (within 60 s) is added to the request and run as one command. A name that matches several contacts shows a contact selector. Anything else that is missing fails with a spoken reason." The task follow-up (4.7, 4.12 step 5e) replaces the reminder one and can ask twice, so decision 8 needs the owner's yes and a CLAUDE.md edit in the same Assistant change |
 | Undo | Every voice mutation returns an undo token valid for 10 minutes (Q11) |
 | Signing | Tasks uses Assistant's keystores: the same release key (`SIGNING_KEYSTORE_PATH` properties, as in Assistant's `app/build.gradle.kts`) and the same debug key. Keys stay under `/home/ijaz/assistant-dev`, never committed (4.2.6) |
 
@@ -356,7 +356,7 @@ next fire time, or null).
 #### 4.5.2 `conversation`
 
 ```json
-{ "id": "c_19ab", "expects": "date", "expires_epoch_ms": 1793109870000, "rounds_left": 1,
+{ "id": "c_19ab", "expects": "date", "expires_epoch_ms": 1793109870000, "rounds_left": 3,
   "options": [ { "id": "o1", "label": "Friday 30 October" },
                { "id": "o2", "label": "Friday 6 November" } ] }
 ```
@@ -430,7 +430,7 @@ new question.
      routes the transcript as a fresh command ("what's the weather" is not eaten).
   5. An answer that is itself ambiguous ("next Friday") or unparseable is re-asked once with a
      narrower prompt ("Say a day, like Friday or the 6th."), if a round is left.
-- **Limits.** At most 2 questions per command. When the second question's answer still does not
+- **Limits.** At most 4 questions per command. When the fourth question's answer still does not
   complete the draft, the result is `declined`: "I still didn't get a day, so I haven't saved it.
   You can add it in Tasks." **Nothing is saved until the conversation completes.** A
   half-specified reminder is never stored as a guess.
@@ -649,7 +649,7 @@ Steps:
      success = status == done)`;
    - (e) add `SessionState.FollowUp(question, options)`. After the question is spoken, call
      `listenForAnswer()` (`FollowUps.kt`; it re-opens the microphone only for a voice session that
-     was not stopped or dismissed since the command began) (max 2 rounds) and route that transcript
+     was not stopped or dismissed since the command began) (max 4 rounds) and route that transcript
      to `follow_up` with `routed_by: "follow_up"`. Option chips reuse the `ChooseContact` pattern
      (`SessionState.ChooseContact`, `PendingChoice.kt`, `chooseContact()` in `FollowUps.kt`);
    - (f) on `not_mine` with `routed_by` `keyword` or `follow_up`, continue into the existing model
@@ -2015,7 +2015,7 @@ Where 8.3 asks instead of acting, 8.3 wins: Tasks is allowed to be more careful,
 4. **Locked decision 8 rewritten** (`CLAUDE.md`). Quoted in full in section 2, "Follow-ups". There is
    no general slot-filling loop, and the old "max 2 clarification rounds per command" no longer
    exists. Three follow-ups exist; the reminder one ("What should I remind you about?", item 2) is
-   the one Tasks replaces. Tasks keeps its own limit of 2 questions; adding it to Assistant needs the owner's yes
+   the one Tasks replaces. Tasks keeps its own limit of 4 questions; adding it to Assistant needs the owner's yes
    and a CLAUDE.md edit. Tasks must not rely on Assistant counting rounds: `context.round` and the
    limit are enforced by Tasks (4.7).
 

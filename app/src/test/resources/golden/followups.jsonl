@@ -32,7 +32,9 @@
 {"id": "u-32", "utterance": "next Friday", "after": "d-07", "expect": {"status": "needs_input", "expects": "date", "speech": "Say a day, like Friday or the 6th."}}
 {"id": "u-33", "utterance": "the sixth", "after": "u-32", "expect": {"status": "done", "intent": "create", "title": "Water the plants", "due": "2026-11-06", "reminder": "SCHEDULE", "speech": "Okay. Added 'Water the plants' to Inbox for Friday 6 November."}}
 {"id": "u-34", "utterance": "next Friday", "after": "seed-33", "expect": {"status": "needs_input", "expects": "time", "speech": "Say a time, like 9 am or half past two."}}
-{"id": "u-35", "utterance": "next Friday", "after": "u-34", "expect": {"status": "declined", "speech": "I still didn't get a time, so I haven't saved it. You can add it in Tasks."}}
+{"id": "u-35", "utterance": "next Friday", "after": "u-34", "expect": {"status": "needs_input", "expects": "time", "speech": "Say a time, like 9 am or half past two."}}
+{"id": "u-35a", "utterance": "next Friday", "after": "u-35", "expect": {"status": "needs_input", "expects": "time", "speech": "Say a time, like 9 am or half past two."}}
+{"id": "u-35b", "utterance": "next Friday", "after": "u-35a", "expect": {"status": "declined", "speech": "I still didn't get a time, so I haven't saved it. You can add it in Tasks."}}
 {"id": "u-36", "utterance": "friday", "after": "seed-11", "expect": {"status": "done", "intent": "create", "title": "Call the garage", "due": "2026-10-30T17:00", "reminder": "SCHEDULE", "speech": "Okay. I'll remind you to call the garage on Friday at 5 pm."}}
 {"id": "u-37", "utterance": "tomorrow", "after": "seed-11", "expect": {"status": "done", "intent": "create", "title": "Call the garage", "due": "2026-10-28T17:00", "reminder": "SCHEDULE", "speech": "Okay. I'll remind you to call the garage tomorrow at 5 pm."}}
 {"id": "u-38", "utterance": "no", "after": "seed-31", "expect": {"status": "declined", "speech": "Okay, I've left it."}}

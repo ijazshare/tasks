@@ -381,7 +381,7 @@ class Commands(private val context: Context, private val clock: () -> Instant = 
 
     private companion object {
         const val NANOS_PER_MS = 1_000_000L
-        const val MAX_ROUND = 2
+        const val MAX_ROUND = 4
         val writer = Executors.newSingleThreadExecutor { Thread(it, "tasks-commands") }.asCoroutineDispatcher()
         val inFlight = ConcurrentHashMap<String, CompletableDeferred<String>>()
     }

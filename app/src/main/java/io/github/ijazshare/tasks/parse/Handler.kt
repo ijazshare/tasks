@@ -124,7 +124,7 @@ private class Conv(
 )
 
 private const val TTL_SECONDS = 90L
-private const val MAX_QUESTIONS = 2
+private const val MAX_QUESTIONS = 4
 private const val REFERENT_MINUTES = 10L
 private const val SPOKEN_LIMIT = 5
 private const val ESCAPES = "cancel|never ?mind|stop|forget it|no thanks"
