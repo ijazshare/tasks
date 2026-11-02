@@ -33,6 +33,8 @@ detekt = "1.23.8"
 # ---- Test ----
 junit = "4.13.2"
 truth = "1.4.5"
+androidxTestJunit = "1.3.0"
+androidxTestRunner = "1.7.0"
 
 [libraries]
 kotlinx-coroutines-android = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-android", version.ref = "coroutines" }
@@ -53,6 +55,8 @@ androidx-room-compiler = { group = "androidx.room", name = "room-compiler", vers
 # ---- Test ----
 junit = { group = "junit", name = "junit", version.ref = "junit" }
 truth = { group = "com.google.truth", name = "truth", version.ref = "truth" }
+androidx-test-junit = { group = "androidx.test.ext", name = "junit", version.ref = "androidxTestJunit" }
+androidx-test-runner = { group = "androidx.test", name = "runner", version.ref = "androidxTestRunner" }
 
 # ---- Referenced from the detekt plugin configuration, not from app dependencies ----
 detekt-formatting = { group = "io.gitlab.arturbosch.detekt", name = "detekt-formatting", version.ref = "detekt" }

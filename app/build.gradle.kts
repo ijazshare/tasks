@@ -19,6 +19,7 @@ android {
         targetSdk = libs.versions.targetSdk.get().toInt()
         versionCode = 1
         versionName = "0.1.0"
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
     buildTypes {
@@ -109,4 +110,8 @@ dependencies {
 
     testImplementation(libs.junit)
     testImplementation(libs.truth)
+
+    androidTestImplementation(libs.truth)
+    androidTestImplementation(libs.androidx.test.junit)
+    androidTestImplementation(libs.androidx.test.runner)
 }
