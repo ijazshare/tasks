@@ -12,17 +12,25 @@ package io.github.ijazshare.tasks.data
 import android.content.Context
 import androidx.room.withTransaction
 import io.github.ijazshare.tasks.reminders.ReminderScheduler
+import io.github.ijazshare.tasks.time.Alert
+import io.github.ijazshare.tasks.time.AlertType
 import io.github.ijazshare.tasks.time.DueSpec
 import io.github.ijazshare.tasks.time.RecurrenceRule
+import io.github.ijazshare.tasks.time.Reminders
+import io.github.ijazshare.tasks.time.Schedule
 import io.github.ijazshare.tasks.time.Scheduling
 import kotlinx.coroutines.flow.Flow
 import java.security.SecureRandom
 import java.time.Duration
 import java.time.Instant
-import java.time.LocalDate
 import java.time.ZoneId
 
 const val INBOX_ID = "p_inbox00000"
+
+/** The seeded tags (8.6); only the first has the Urgent schedule. Their ids are fixed: `l_<name>`. */
+val SEED_LABELS = listOf("urgent", "work", "personal", "family", "client")
+
+fun Reminder.pending() = lastFiredAt == null || snoozedUntil != null
 
 private const val ALPHABET = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
 private const val ID_LENGTH = 10
@@ -37,12 +45,23 @@ fun Task.due(): DueSpec? = dueDate?.let { DueSpec(it, dueTime, dueZone) }
  * Every write goes through here, inside one Room transaction, and ends by re-arming the alarm.
  * (The undo-journal row each mutation will also write arrives with M3.)
  */
+@Suppress("TooManyFunctions") // one repository for one small schema
 class Repository(private val context: Context) {
     private val db get() = TasksDb.get(context)
     private val dao get() = db.dao()
     private val scheduler get() = ReminderScheduler(context)
 
-    fun dated(until: LocalDate): Flow<List<Task>> = dao.dated(until)
+    fun dated(): Flow<List<Task>> = dao.dated()
+
+    fun missed(): Flow<List<Task>> = dao.missed()
+
+    fun labels(): Flow<List<Label>> = dao.labels()
+
+    fun taskLabels(): Flow<List<TaskLabel>> = dao.taskLabels()
+
+    fun reminders(): Flow<List<Reminder>> = dao.reminders()
+
+    suspend fun tagsOf(taskId: String): Set<String> = dao.labelIdsOf(taskId).toSet()
 
     fun inProject(projectId: String): Flow<List<Task>> = dao.inProject(projectId)
 
@@ -58,12 +77,28 @@ class Repository(private val context: Context) {
         )
     }
 
+    /** Idempotent, like [ensureInbox]: fixed ids, insert-or-ignore. */
+    suspend fun ensureLabels() {
+        val now = Instant.now()
+        SEED_LABELS.forEachIndexed { i, name ->
+            val schedule = if (name == "urgent") Schedule.URGENT else Schedule.REGULAR
+            dao.insert(Label("l_$name", name, name, null, i, now, now, null, schedule.toJson()))
+        }
+    }
+
+    /** Re-derives every open task's reminder rows; matching rows keep their state. Run at start and on zone changes. */
+    suspend fun rederiveAll() {
+        val now = Instant.now()
+        val zone = ZoneId.systemDefault()
+        db.withTransaction { dao.datedOpenTasks().forEach { rederive(it, now, zone, reset = false) } }
+    }
+
     /** A blank task in [projectId]; [save] gives it its first write. */
     fun blank(projectId: String): Task {
         val now = Instant.now()
         return Task(
             newId("t_"), "", "", projectId, null, null, 0, PRIORITY_NONE, null, null, null, null, null, null,
-            null, null, null, now, now, null, "typed", null,
+            null, null, null, now, now, null, "typed", null, null,
         )
     }
 
@@ -82,10 +117,10 @@ class Repository(private val context: Context) {
 
     /**
      * Creates or updates a task. A recurring task whose date, time or rule changed gets its first
-     * occurrence at or after now (8.2). A timed task has one at-due reminder (D3), reset when its
-     * due changes. A reminder born in the past counts as fired: it is overdue, not "missed".
+     * occurrence at or after now (8.2). Reminder rows are re-derived (8.6) when the due, the rule
+     * or the [tags] (label ids; null = unchanged) change. An alert already past counts as skipped.
      */
-    suspend fun save(task: Task) {
+    suspend fun save(task: Task, tags: Set<String>? = null) {
         val now = Instant.now()
         val zone = ZoneId.systemDefault()
         db.withTransaction {
@@ -94,6 +129,7 @@ class Repository(private val context: Context) {
             if (t.dueDate == null || t.dueTime == null) t = t.copy(dueTime = null, dueZone = null)
             if (t.dueDate == null) t = t.copy(recurrence = null)
             if (t.recurrence == null) t = t.copy(recurrenceText = null, recurrenceAnchor = null)
+            val tagsChanged = setTags(t.id, tags)
             val changed = old == null || old.dueDate != t.dueDate || old.dueTime != t.dueTime ||
                 old.dueZone != t.dueZone || old.recurrence != t.recurrence
             val rule = t.recurrence?.let(RecurrenceRule::parse)
@@ -104,9 +140,17 @@ class Repository(private val context: Context) {
             dao.upsert(t)
             dao.deleteFts(t.id)
             dao.insertFts(t.id, t.title)
-            if (changed) resetReminder(t, now, zone)
+            if (changed || tagsChanged) rederive(t, now, zone, reset = changed)
         }
         scheduler.rearm()
+    }
+
+    /** Stores [tags] (null = leave alone); true if they differ from what was there. */
+    private suspend fun setTags(taskId: String, tags: Set<String>?): Boolean {
+        if (tags == null || tags == dao.labelIdsOf(taskId).toSet()) return false
+        dao.clearTags(taskId)
+        dao.insertTags(tags.map { TaskLabel(taskId, it) })
+        return true
     }
 
     /**
@@ -133,7 +177,7 @@ class Repository(private val context: Context) {
             }
             val moved = t.copy(dueDate = next.date, updatedAt = now)
             dao.upsert(moved)
-            resetReminder(moved, now, zone)
+            rederive(moved, now, zone, reset = true)
         }
         scheduler.rearm()
     }
@@ -150,12 +194,16 @@ class Repository(private val context: Context) {
         scheduler.rearm()
     }
 
-    suspend fun snooze(id: String, duration: Duration) {
+    /** Snoozes the alert [reminderId], unless that would stack on the task's next alert (8.6 rule 5). */
+    suspend fun snooze(reminderId: String, length: Duration) {
         val now = Instant.now()
         db.withTransaction {
-            dao.remindersOf(id).filter { it.deletedAt == null }.forEach {
-                dao.upsert(listOf(it.copy(snoozedUntil = now.plus(duration), unseen = false, updatedAt = now)))
-            }
+            val r = dao.reminder(reminderId) ?: return@withTransaction
+            val others = dao.remindersOf(r.taskId).filter {
+                it.deletedAt == null && it.pending() && (it.id != r.id || it.kind == AlertType.NAG.name)
+            }.mapNotNull { it.snoozedUntil ?: it.atInstant ?: it.nextFireAt }
+            val until = Reminders.snoozeUntil(now, length, others) ?: r.snoozedUntil
+            dao.upsert(listOf(r.copy(snoozedUntil = until, unseen = false, updatedAt = now)))
         }
         scheduler.rearm()
     }
@@ -169,42 +217,53 @@ class Repository(private val context: Context) {
             val due = t.due() ?: return@withTransaction
             val moved = t.copy(dueDate = Scheduling.tomorrow(now, due.zoneId(zone)), updatedAt = now)
             dao.upsert(moved)
-            resetReminder(moved, now, zone)
+            rederive(moved, now, zone, reset = true)
         }
         scheduler.rearm()
     }
 
     suspend fun markSeen(id: String) = dao.markSeen(id)
 
+    /** The task was opened: its alerts are seen and it leaves the Missed list. */
+    suspend fun opened(id: String) {
+        dao.markSeen(id)
+        dao.clearMissed(id)
+    }
+
+    private fun Alert.matches(r: Reminder) = type.name == r.kind && offsetMin == r.offsetMin
+
     private suspend fun softDeleteReminders(taskId: String, now: Instant) {
         dao.upsert(dao.remindersOf(taskId).map { it.copy(deletedAt = now, unseen = false, updatedAt = now) })
     }
 
-    private suspend fun resetReminder(t: Task, now: Instant, zone: ZoneId) {
-        val due = t.due()
-        if (due == null || due.time == null) return softDeleteReminders(t.id, now)
-        val fireAt = due.instant(zone)
-        val old = dao.remindersOf(t.id).firstOrNull()
+    /**
+     * Brings [t]'s reminder rows in line with its due, tags and recurrence (8.6). Rows that still
+     * match keep their state (fired, snoozed, unseen) unless [reset]; the rest are replaced.
+     */
+    private suspend fun rederive(t: Task, now: Instant, zone: ZoneId, reset: Boolean) {
+        val due = t.due() ?: return softDeleteReminders(t.id, now)
+        val schedule = Schedule.pick(dao.schedules(t.id).mapNotNull { Schedule.parse(it.scheduleJson) })
+        val repeating = t.recurrence != null
+        val all = Reminders.candidates(due, repeating, schedule, zone)
+        val rows = dao.remindersOf(t.id)
+        val upcoming = Reminders.upcoming(due, repeating, schedule, now, zone)
+        // A row stays if it is still one of this task's alerts and either is history, is overdue
+        // for delivery (a Missed one), or is still wanted; a pending alert the tags dropped goes.
+        val keep = rows.filter { r ->
+            !reset && r.deletedAt == null && all.any {
+                it.type.name == r.kind && it.offsetMin == r.offsetMin &&
+                    (it.type == AlertType.NAG || it.at == r.atInstant)
+            } && (!r.pending() || (r.snoozedUntil ?: r.atInstant)!! <= now || upcoming.any { it.matches(r) })
+        }
+        dao.deleteReminders((rows - keep.toSet()).map { it.id })
+        val fresh = upcoming.filter { a -> keep.none { a.matches(it) } }
         dao.upsert(
-            listOf(
+            fresh.map {
                 Reminder(
-                    id = old?.id ?: newId("r_"),
-                    taskId = t.id,
-                    kind = "AT_DUE",
-                    offsetMin = null,
-                    atDate = null,
-                    atTime = null,
-                    atZone = null,
-                    atInstant = null,
-                    nextFireAt = fireAt,
-                    lastFiredAt = if (fireAt <= now) fireAt else null,
-                    snoozedUntil = null,
-                    unseen = false,
-                    createdAt = old?.createdAt ?: now,
-                    updatedAt = now,
-                    deletedAt = null,
-                ),
-            ),
+                    newId("r_"), t.id, it.type.name, it.offsetMin, null, null, null, it.at, it.at, null, null,
+                    false, now, now, null,
+                )
+            },
         )
     }
 

@@ -11,6 +11,8 @@ package io.github.ijazshare.tasks.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -23,8 +25,10 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -39,23 +43,57 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import io.github.ijazshare.tasks.data.Label
 import io.github.ijazshare.tasks.data.Project
+import io.github.ijazshare.tasks.data.Reminder
 import io.github.ijazshare.tasks.data.Task
+import io.github.ijazshare.tasks.data.pending
 import io.github.ijazshare.tasks.ui.theme.TasksColors
+import java.time.Instant
 import java.time.LocalDate
+import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
 
 private val dateFormat = DateTimeFormatter.ofPattern("EEE d MMM")
 private val timeFormat = DateTimeFormatter.ofLocalizedTime(FormatStyle.SHORT)
-private const val UPCOMING_DAYS = 14L
 
 fun dateText(date: LocalDate): String = date.format(dateFormat)
+
+/** The next alert: a clock time today, else the date too. */
+private fun alertText(at: Instant): String {
+    val z = at.atZone(ZoneId.systemDefault())
+    return if (z.toLocalDate() ==
+        LocalDate.now()
+    ) {
+        timeText(z.toLocalTime())
+    } else {
+        "${dateText(z.toLocalDate())} ${timeText(z.toLocalTime())}"
+    }
+}
+
+/** The earliest pending alert of each task (a snooze counts), for the rows' "alert" text. */
+fun nextAlerts(reminders: List<Reminder>): Map<String, Instant> = reminders.filter { it.pending() }
+    .mapNotNull { r -> (r.snoozedUntil ?: r.atInstant)?.let { r.taskId to it } }
+    .groupBy({ it.first }, { it.second }).mapValues { (_, at) -> at.min() }
+
+/** Tag filter chips (spec 8.6 rule 7): several chosen = a task with any of them. */
+@Composable
+fun TagFilter(labels: List<Label>, selected: List<String>, onToggle: (String) -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        labels.forEach {
+            FilterChip(selected = it.id in selected, onClick = { onToggle(it.id) }, label = { Text(it.name) })
+        }
+    }
+}
 
 fun timeText(time: java.time.LocalTime): String = time.format(timeFormat)
 
 @Composable
-fun TaskRow(task: Task, withDate: Boolean, onOpen: () -> Unit, onComplete: () -> Unit) {
+fun TaskRow(task: Task, withDate: Boolean, next: Instant?, onOpen: () -> Unit, onComplete: () -> Unit) {
     val color = when (task.priority) {
         1 -> TasksColors.Relevant
         2 -> TasksColors.Asset
@@ -66,6 +104,7 @@ fun TaskRow(task: Task, withDate: Boolean, onOpen: () -> Unit, onComplete: () ->
         task.dueDate?.takeIf { withDate }?.let(::dateText),
         task.dueTime?.let(::timeText),
         task.recurrenceText?.let { "repeats: $it" },
+        next?.let { "alert ${alertText(it)}" },
     ).joinToString(" · ")
     Row(
         Modifier.fillMaxWidth().heightIn(min = 56.dp).clickable(onClickLabel = "Open task", onClick = onOpen),
@@ -108,12 +147,23 @@ private fun Empty(text: String) {
     }
 }
 
-private fun LazyListScope.rows(tasks: List<Task>, withDate: Boolean, open: (Task) -> Unit, done: (Task) -> Unit) =
-    items(tasks, key = { it.id }) { TaskRow(it, withDate, { open(it) }, { done(it) }) }
+private fun LazyListScope.rows(
+    tasks: List<Task>,
+    withDate: Boolean,
+    alerts: Map<String, Instant>,
+    open: (Task) -> Unit,
+    done: (Task) -> Unit,
+) = items(tasks, key = { it.id }) { TaskRow(it, withDate, alerts[it.id], { open(it) }, { done(it) }) }
 
-/** Overdue (collapsible), then today: timed tasks, then all-day ones. [tasks] is every open task due up to today. */
+/** Overdue (collapsible), then today: timed tasks, then all-day ones. [tasks] is every open dated task. */
 @Composable
-fun TodayScreen(tasks: List<Task>, today: LocalDate, open: (Task) -> Unit, done: (Task) -> Unit) {
+fun TodayScreen(
+    tasks: List<Task>,
+    today: LocalDate,
+    alerts: Map<String, Instant>,
+    open: (Task) -> Unit,
+    done: (Task) -> Unit,
+) {
     var showOverdue by rememberSaveable { mutableStateOf(true) }
     val overdue = tasks.filter { it.dueDate!! < today }
     val now = tasks.filter { it.dueDate == today }
@@ -121,38 +171,51 @@ fun TodayScreen(tasks: List<Task>, today: LocalDate, open: (Task) -> Unit, done:
     LazyColumn(Modifier.fillMaxSize()) {
         if (overdue.isNotEmpty()) {
             item { Header("Overdue (${overdue.size}) ${if (showOverdue) "▾" else "▸"}") { showOverdue = !showOverdue } }
-            if (showOverdue) rows(overdue, true, open, done)
+            if (showOverdue) rows(overdue, true, alerts, open, done)
         }
         val timed = now.filter { it.dueTime != null }
         val allDay = now.filter { it.dueTime == null }
         if (timed.isNotEmpty()) {
             item { Header("Today") }
-            rows(timed, false, open, done)
+            rows(timed, false, alerts, open, done)
         }
         if (allDay.isNotEmpty()) {
             item { Header("All day") }
-            rows(allDay, false, open, done)
+            rows(allDay, false, alerts, open, done)
         }
     }
 }
 
-/** The next 14 days, grouped by day. [tasks] is every open task due before today + 14. */
+/** Everything due after tomorrow, by day. [tasks] is every open dated task. */
 @Composable
-fun UpcomingScreen(tasks: List<Task>, today: LocalDate, open: (Task) -> Unit, done: (Task) -> Unit) {
-    val coming = tasks.filter { it.dueDate!! >= today && it.dueDate < today.plusDays(UPCOMING_DAYS) }
-    if (coming.isEmpty()) return Empty("Nothing in the next 14 days.")
+fun UpcomingScreen(
+    tasks: List<Task>,
+    today: LocalDate,
+    alerts: Map<String, Instant>,
+    open: (Task) -> Unit,
+    done: (Task) -> Unit,
+) {
+    val coming = tasks.filter { it.dueDate!! >= today.plusDays(2) }
+    if (coming.isEmpty()) return Empty("Nothing after tomorrow.")
     LazyColumn(Modifier.fillMaxSize()) {
         coming.groupBy { it.dueDate!! }.forEach { (date, group) ->
-            item { Header(if (date == today) "Today" else dateText(date)) }
-            rows(group, false, open, done)
+            item { Header(dateText(date)) }
+            rows(group, false, alerts, open, done)
         }
     }
 }
 
 @Composable
-fun TaskListScreen(tasks: List<Task>, empty: String, open: (Task) -> Unit, done: (Task) -> Unit) {
+fun TaskListScreen(
+    tasks: List<Task>,
+    empty: String,
+    alerts: Map<String, Instant>,
+    open: (Task) -> Unit,
+    done: (Task) -> Unit,
+    withDate: Boolean = true,
+) {
     if (tasks.isEmpty()) return Empty(empty)
-    LazyColumn(Modifier.fillMaxSize()) { rows(tasks, true, open, done) }
+    LazyColumn(Modifier.fillMaxSize()) { rows(tasks, withDate, alerts, open, done) }
 }
 
 @Composable

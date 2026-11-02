@@ -23,7 +23,10 @@ class TasksApplication : Application() {
         // Every process start re-arms (spec 8.4): force-stop clears alarms, and this is what restores them.
         CoroutineScope(Dispatchers.IO).launch {
             try {
-                Repository(this@TasksApplication).ensureInbox()
+                val repo = Repository(this@TasksApplication)
+                repo.ensureInbox()
+                repo.ensureLabels()
+                repo.rederiveAll()
                 ReminderScheduler(this@TasksApplication).rearm()
             } catch (@Suppress("TooGenericExceptionCaught") e: Exception) { // startup must survive anything
                 Log.e("Tasks", "startup re-arm failed", e)

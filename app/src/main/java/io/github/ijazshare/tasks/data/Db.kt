@@ -19,11 +19,13 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.TypeConverter
 import androidx.room.TypeConverters
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalTime
 
-// Schema v1, spec section 5 (rewritten in place after M0: FTS fix, `reminder.unseen`).
+// Schema v2, spec section 5. v2 adds `label.scheduleJson` and `task.missedAt` (MIGRATION_1_2).
 // Ids are random strings, timestamps are epoch ms, dates and times are ISO strings. Columns carry
 // the property name (camelCase); `order` is reserved in SQL, so the property is `sortOrder`.
 // Everything soft-deletes through `deletedAt`.
@@ -67,6 +69,8 @@ data class Label(
     val createdAt: Instant,
     val updatedAt: Instant,
     val deletedAt: Instant?,
+    /** The reminder schedule this tag gives its tasks (spec 8.6); null = Regular. Added in v2. */
+    val scheduleJson: String?,
 )
 
 @Entity(tableName = "task", indices = [Index("projectId", "completedAt", "deletedAt"), Index("dueDate")])
@@ -96,6 +100,8 @@ data class Task(
     val deletedAt: Instant?,
     val source: String,
     val sourceUtterance: String?,
+    /** When an alert of this task was missed and the task not opened since (8.6 rule 8). Added in v2. */
+    val missedAt: Instant?,
 )
 
 /**
@@ -243,6 +249,13 @@ class Converters {
     @TypeConverter fun time(value: LocalTime?): String? = value?.toString()
 }
 
+val MIGRATION_1_2 = object : Migration(1, 2) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE label ADD COLUMN scheduleJson TEXT")
+        db.execSQL("ALTER TABLE task ADD COLUMN missedAt INTEGER")
+    }
+}
+
 @Database(
     entities = [
         Project::class, Section::class, Label::class, Task::class, TaskFts::class, TaskLabel::class,
@@ -250,7 +263,7 @@ class Converters {
         RequestLog::class, ImportMap::class, ImportRun::class, Ramble::class, RambleDraft::class,
         UtteranceLog::class,
     ],
-    version = 1,
+    version = 2,
 )
 @TypeConverters(Converters::class)
 abstract class TasksDb : RoomDatabase() {
@@ -261,6 +274,7 @@ abstract class TasksDb : RoomDatabase() {
 
         fun get(context: Context): TasksDb = instance ?: synchronized(this) {
             instance ?: Room.databaseBuilder(context.applicationContext, TasksDb::class.java, "tasks.db")
+                .addMigrations(MIGRATION_1_2)
                 .build()
                 .also { instance = it }
         }

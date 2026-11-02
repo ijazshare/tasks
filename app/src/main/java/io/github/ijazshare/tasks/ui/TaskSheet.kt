@@ -35,6 +35,7 @@ import androidx.compose.material3.TimePicker
 import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
@@ -45,6 +46,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import io.github.ijazshare.tasks.data.Label
 import io.github.ijazshare.tasks.data.Project
 import io.github.ijazshare.tasks.data.Repository
 import io.github.ijazshare.tasks.data.Task
@@ -81,16 +83,31 @@ private fun presets(date: LocalDate?): List<Pair<String, String?>> {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TaskSheet(taskId: String, defaultProject: String, projects: List<Project>, repo: Repository, onClose: () -> Unit) {
-    val loaded by produceState<Task?>(null, taskId) {
-        value = if (taskId == NEW_TASK) repo.blank(defaultProject) else repo.task(taskId)
+    val loaded by produceState<Pair<Task, Set<String>>?>(null, taskId) {
+        value = if (taskId == NEW_TASK) {
+            repo.blank(defaultProject) to emptySet()
+        } else {
+            repo.task(taskId)?.let { it to repo.tagsOf(taskId) }
+        }
     }
-    val task = loaded ?: return
-    ModalBottomSheet(onDismissRequest = onClose) { Editor(task, taskId == NEW_TASK, projects, repo, onClose) }
+    val labels by repo.labels().collectAsState(emptyList())
+    val (task, tags) = loaded ?: return
+    ModalBottomSheet(onDismissRequest = onClose) {
+        Editor(task, tags, labels, taskId == NEW_TASK, projects, repo, onClose)
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun Editor(task: Task, isNew: Boolean, projects: List<Project>, repo: Repository, onClose: () -> Unit) {
+private fun Editor(
+    task: Task,
+    initialTags: Set<String>,
+    labels: List<Label>,
+    isNew: Boolean,
+    projects: List<Project>,
+    repo: Repository,
+    onClose: () -> Unit,
+) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var title by rememberSaveable { mutableStateOf(task.title) }
@@ -101,6 +118,7 @@ private fun Editor(task: Task, isNew: Boolean, projects: List<Project>, repo: Re
     var keepTime by rememberSaveable { mutableStateOf(task.dueZone != null) }
     var priority by rememberSaveable { mutableStateOf(task.priority) }
     var projectId by rememberSaveable { mutableStateOf(task.projectId) }
+    var tags by rememberSaveable { mutableStateOf(initialTags.toList()) }
     val date = epochDay?.let(LocalDate::ofEpochDay)
     var preset by rememberSaveable {
         mutableStateOf(presets(date).indexOfFirst { it.second == task.recurrence }.coerceAtLeast(0))
@@ -137,7 +155,7 @@ private fun Editor(task: Task, isNew: Boolean, projects: List<Project>, repo: Re
                 Switch(keepTime, { keepTime = it })
             }
             Text(
-                "A reminder fires at this time.",
+                "Alerts come from the task's tags (urgent nags until Done).",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -146,6 +164,16 @@ private fun Editor(task: Task, isNew: Boolean, projects: List<Project>, repo: Re
         ChipRow(presets(date).map { it.first }, preset, enabled = date != null) { preset = it }
         Text("Priority", style = MaterialTheme.typography.labelLarge)
         ChipRow(listOf("P1", "P2", "P3", "P4"), priority - 1) { priority = it + 1 }
+        Text("Tags", style = MaterialTheme.typography.labelLarge)
+        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            labels.forEach { l ->
+                FilterChip(
+                    selected = l.id in tags,
+                    onClick = { tags = if (l.id in tags) tags - l.id else tags + l.id },
+                    label = { Text(l.name) },
+                )
+            }
+        }
         Text("Project", style = MaterialTheme.typography.labelLarge)
         ChipRow(projects.map { it.name }, projects.indexOfFirst { it.id == projectId }) { projectId = projects[it].id }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(vertical = 8.dp)) {
@@ -166,7 +194,7 @@ private fun Editor(task: Task, isNew: Boolean, projects: List<Project>, repo: Re
                         recurrenceAnchor = "schedule".takeIf { rule != null },
                     )
                     scope.launch {
-                        repo.save(saved)
+                        repo.save(saved, tags.toSet())
                         onClose()
                     }
                 },

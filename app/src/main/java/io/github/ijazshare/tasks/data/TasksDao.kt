@@ -15,7 +15,7 @@ import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Upsert
 import kotlinx.coroutines.flow.Flow
-import java.time.LocalDate
+import java.time.Instant
 
 @Suppress("TooManyFunctions") // one DAO for one small schema; splitting it adds nothing
 @Dao
@@ -41,12 +41,55 @@ interface TasksDao {
     @Query("INSERT INTO task_fts(taskId, title) VALUES (:id, :title)")
     suspend fun insertFts(id: String, title: String)
 
-    /** Open tasks with a due before [until], overdue ones included. */
+    /** Open tasks with a due, overdue ones included, by due date. */
     @Query(
         "SELECT * FROM task WHERE completedAt IS NULL AND deletedAt IS NULL AND dueDate IS NOT NULL " +
-            "AND dueDate < :until ORDER BY dueDate, dueTime IS NULL, dueTime, sortOrder, createdAt",
+            "ORDER BY dueDate, dueTime IS NULL, dueTime, sortOrder, createdAt",
     )
-    fun dated(until: LocalDate): Flow<List<Task>>
+    fun dated(): Flow<List<Task>>
+
+    @Query(
+        "SELECT * FROM task WHERE completedAt IS NULL AND deletedAt IS NULL AND missedAt IS NOT NULL " +
+            "ORDER BY missedAt DESC",
+    )
+    fun missed(): Flow<List<Task>>
+
+    @Query("SELECT * FROM label WHERE deletedAt IS NULL ORDER BY sortOrder, nameKey")
+    fun labels(): Flow<List<Label>>
+
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insert(label: Label): Long
+
+    @Query("SELECT * FROM task_label")
+    fun taskLabels(): Flow<List<TaskLabel>>
+
+    @Query("SELECT labelId FROM task_label WHERE taskId = :taskId")
+    suspend fun labelIdsOf(taskId: String): List<String>
+
+    @Query("DELETE FROM task_label WHERE taskId = :taskId")
+    suspend fun clearTags(taskId: String)
+
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertTags(tags: List<TaskLabel>)
+
+    /** The schedules of the tags of [taskId], or of every task if null. */
+    @Query(
+        "SELECT tl.taskId AS taskId, l.scheduleJson AS scheduleJson FROM task_label tl " +
+            "JOIN label l ON l.id = tl.labelId WHERE l.deletedAt IS NULL AND (:taskId IS NULL OR tl.taskId = :taskId)",
+    )
+    suspend fun schedules(taskId: String?): List<TaskSchedule>
+
+    @Query("SELECT * FROM reminder WHERE deletedAt IS NULL")
+    fun reminders(): Flow<List<Reminder>>
+
+    @Query("SELECT * FROM reminder WHERE id = :id")
+    suspend fun reminder(id: String): Reminder?
+
+    @Query("DELETE FROM reminder WHERE id IN (:ids)")
+    suspend fun deleteReminders(ids: List<String>)
+
+    @Query("UPDATE task SET missedAt = :at WHERE id IN (:ids)")
+    suspend fun markMissed(ids: List<String>, at: Instant)
 
     @Query(
         "SELECT * FROM task WHERE projectId = :projectId AND completedAt IS NULL AND deletedAt IS NULL " +
@@ -63,11 +106,8 @@ interface TasksDao {
     @Query("SELECT COALESCE(MAX(sortOrder), 0) + 1 FROM project")
     suspend fun nextProjectOrder(): Int
 
-    @Query(
-        "SELECT * FROM task WHERE completedAt IS NULL AND deletedAt IS NULL " +
-            "AND dueDate IS NOT NULL AND dueTime IS NOT NULL",
-    )
-    suspend fun timedOpenTasks(): List<Task>
+    @Query("SELECT * FROM task WHERE completedAt IS NULL AND deletedAt IS NULL AND dueDate IS NOT NULL")
+    suspend fun datedOpenTasks(): List<Task>
 
     @Query("SELECT * FROM reminder WHERE deletedAt IS NULL")
     suspend fun liveReminders(): List<Reminder>
@@ -77,4 +117,11 @@ interface TasksDao {
 
     @Query("UPDATE reminder SET unseen = 0 WHERE taskId = :taskId")
     suspend fun markSeen(taskId: String)
+
+    /** Opening a task clears it from the Missed list. */
+    @Query("UPDATE task SET missedAt = NULL WHERE id = :taskId")
+    suspend fun clearMissed(taskId: String)
 }
+
+/** One tag's schedule for one task. */
+data class TaskSchedule(val taskId: String, val scheduleJson: String?)
