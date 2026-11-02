@@ -36,16 +36,15 @@ class QueryTest {
 
     private fun run(q: String) = tasks.filter { taskMatcher(q)(it, env) }.map { it.title }
 
-    @Test fun datesAndPriority() {
+    @Test fun dates() {
         assertEquals(listOf("Water Amira's ferns"), run("today"))
         assertEquals(listOf("Pay the gas bill"), run("overdue"))
         assertEquals(listOf("Sort the shed"), run("no date"))
-        assertEquals(listOf("Water Amira's ferns"), run("P1"))
     }
 
     @Test fun operators() {
         assertEquals(listOf("Water Amira's ferns", "Pay the gas bill"), run("#Home & (today | overdue)"))
-        assertEquals(listOf("Pay the gas bill", "Sort the shed"), run("#home & !p1"))
+        assertEquals(listOf("Pay the gas bill", "Sort the shed"), run("#home & !today"))
         assertEquals(listOf("Water Amira's ferns", "Sort the shed"), run("%errands"))
         assertEquals(listOf("Sort the shed"), run("@slow & !today"))
         assertEquals(listOf("Plan Zaid's trip"), run("tomorrow | ##travel"))

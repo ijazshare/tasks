@@ -124,7 +124,7 @@ fun QuickAddBar(
             label = {
                 Text(
                     reply?.takeIf { it.status == "needs_input" }?.speech
-                        ?: "Quick add, like: call Amira tomorrow 5pm #Home %errands p2",
+                        ?: "Quick add, like: call Amira tomorrow 5pm #Home %errands",
                 )
             },
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),

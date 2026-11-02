@@ -37,7 +37,7 @@ before the milestone that depends on it (section 14, "verification gates").
 ### Goals
 
 1. A Todoist-like task manager that runs entirely on the phone. **Must** for v1: Inbox, flat
-   projects, labels, priorities, due dates and times, recurring tasks and reminders. **Should**:
+   projects, labels, ~~priorities~~ (priorities removed from v1 (owner, 2026-11-02)), due dates and times, recurring tasks and reminders. **Should**:
    sections, subtasks and nested projects (section 7 has the full must/should list).
 2. **Tasks owns all task logic.** It parses, decides, acts and writes the reply that gets spoken.
    Assistant stays a lean, generalist router. Assistant never needs a large model for a task command:
@@ -342,7 +342,7 @@ next fire time, or null).
 | `op` | Extra fields | Produced by |
 |---|---|---|
 | `created` | task fields | create |
-| `updated` | task fields, `changed`: list of field names (`priority`, `project`, `labels`, `title`) | set priority, move project, add label |
+| `updated` | task fields, `changed`: list of field names (`priority`, `project`, `labels`, `title`) | move project, add label (priority: priorities removed from v1 (owner, 2026-11-02)) |
 | `rescheduled` | task fields, `previous_due` | reschedule, snooze-by-voice |
 | `completed` | task fields; for a recurring task `due` is the **next** occurrence and `completed_occurrence` the one ticked | complete, `complete_by_legacy_id` |
 | `deleted` | task fields (as they were) | delete |
@@ -542,7 +542,7 @@ owner's Samsung foldable, Snapdragon SM8850, Android 17, as the primary target).
 | delete | "delete the gym task", "remove the gym reminder" | must |
 | ramble | "brain dump …", "start a brain dump" (or `type: ramble`) | should (M4) |
 | undo | via token | must |
-| change an existing task: set priority / move project / add label | "make the insurer task priority one" | should |
+| change an existing task: move project / add label (priority: priorities removed from v1 (owner, 2026-11-02)) | "make the insurer task priority one" | should |
 | create project, list or label (explicit only) | "create a list called Garden", "create a label called errands" | should |
 | reopen (uncomplete) | "un-tick call Amira" | later |
 
@@ -616,7 +616,7 @@ Steps:
      - `^(read|show|open) my (tasks|list|to-?do( list)?)\b`, `^my (tasks|to-?do( list)?)\b`, `^to-?do\b`
      - `^(move|push|reschedule|postpone|snooze) .+ (to|until|for|by)\b`, `^(snooze|push) (that|it)\b`
      - `^(delete|remove) .+ (task|reminder|from my list)\b`
-     - `^(priority|p) ?(one|two|three|four|[1-4])\b`, `^(make|set) .+ priority\b`
+     - (priorities removed from v1 (owner, 2026-11-02)) `^(priority|p) ?(one|two|three|four|[1-4])\b`, `^(make|set) .+ priority\b`
      - `^(create|make|add) (a )?(new )?(list|project|label) (called|named)\b`
      - `\b(brain ?dump|ramble)\b` within the first 5 words
    - The undo pattern (4.8) is checked before this, and only when a token is held.
@@ -773,7 +773,7 @@ retention rules in section 12. `order` is a reserved SQL word, so the column is 
 @Entity task(
   id, title, description: String /* markdown, may be empty */,
   project_id, section_id?, parent_id? /* subtask, max depth 4 */, sort_order: Int,
-  priority: Int /* 1 = highest (spoken "priority one" / p1) … 4 = none */,
+  priority: Int /* priorities removed from v1 (owner, 2026-11-02): always 4, ignored; was 1 = highest (spoken "priority one" / p1) … 4 = none */,
   // due (all null = no due)
   due_date: LocalDate?, due_time: LocalTime? /* null = all-day; minute precision */,
   due_zone: String? /* IANA id; null = floating, interpreted in the device's current zone */,
@@ -899,7 +899,7 @@ openTasksIndex, settings)`.
    4. times (`at 5`, `5pm`, `17:00`, `half past six`, `quarter to 9`, `noon`, `midnight`, `in the
       morning/afternoon/evening`);
    5. deadline (`deadline Friday`, typed `{Friday}`);
-   6. priority (`priority one…four`, `p1…p4`, `high priority` = p2; `urgent` is a tag, 8.6 rule 6);
+   6. priority (priorities removed from v1 (owner, 2026-11-02): not parsed, the words stay in the title) (`priority one…four`, `p1…p4`, `high priority` = p2; `urgent` is a tag, 8.6 rule 6);
    7. project, section and label (spoken `in my X list`, `to the X project`, `label Y`, `tagged Y`;
       typed `#X`, `/S`, `%Y` and `@Y`).
 
@@ -980,7 +980,7 @@ terminals that lower to the same AST. They follow Todoist's current Quick Add sy
 | `#Work /Admin` | section (after a project) | |
 | `%errands` | label | Todoist's current label symbol |
 | `@errands` | label | Also accepted. Todoist plans to retire `@` by the end of 2026; Tasks keeps it because it has no other meaning here |
-| `p1`-`p4` | priority | Todoist's help lists `p1`-`p3` (p4 = no priority); its API docs accept `p1`-`p4` |
+| `p1`-`p4` | priority (priorities removed from v1 (owner, 2026-11-02)) | Todoist's help lists `p1`-`p3` (p4 = no priority); its API docs accept `p1`-`p4` |
 | `{Friday}` | deadline | |
 | `!14:00`, `!30 min before` | extra reminder (at a time, or before due) | should. Todoist's help shows exactly these two forms (checked 2026-11-02); this spec's shorthand `!30mb` and `!2h` is dropped. M2 parses the symbol away but stores nothing, because alerts come from tags (8.6) |
 | `for 2h` | duration | later (parsed and stored) |
@@ -1122,7 +1122,7 @@ research note and must be checked before being treated as parity claims.
 | Sections | should | Todoist `/section` (features §3 [C]) |
 | Subtasks | should (depth ≤ 4) | Voice can't create them in v1. Todoist's Ramble can't either (features §1 [C]) |
 | Labels | **must** | Matched by name, never created from speech except as in 4.7. Typed `%label` (Todoist's current symbol) and `@label` (features §3 [C]) |
-| Priorities p1-p4 | **must** | Stored 1 = highest; p4 = none (features §4 [S]). Todoist API is inverted, 4 = urgent (api §2); map on import |
+| Priorities p1-p4 | ~~must~~ priorities removed from v1 (owner, 2026-11-02) | Stored 1 = highest; p4 = none (features §4 [S]). Todoist API is inverted, 4 = urgent (api §2); map on import |
 | Due date, due time | **must** | Todoist also takes relative "in 2 hours", "in 5 days" (features §3 [C]) |
 | Recurring due dates | **must** | Grammar in 8.2. Todoist: `every` keeps the cycle, `every!` repeats from the completion date, `after 10 days` = `every! 10 days` (features §3 [C]). `every!` is should here. Todoist's `starting` / `ending` / `for` ranges and `every last workday`: later |
 | Deadlines `{…}` | should | Separate from due. Todoist: a hard cutoff, not allowed on recurring tasks, Pro/Business only (features §4 [C]); Tasks copies the recurring-task rule |
@@ -1632,7 +1632,7 @@ Seed cases. All have now = **Tue 27 Oct 2026 14:03, Europe/London (GMT), h12**, 
 | 19 | (follow-up to 5) "the sixth" | needs_input expects=time; "What time on Friday 6 November?" options "9 am" / "No alert" (second and last question) |
 | 20 | Thank you. | not_mine |
 | 21 | remind me tonight to lock the shed | done; today 20:00 (D2), speech "today at 8 pm" |
-| 22 | priority one call the insurer tomorrow morning | done; p1, 2026-10-28 09:00 (D2), reminder at due (D3) |
+| 22 | add call the insurer tomorrow morning | done; 2026-10-28 09:00 (D2), reminder at due (D3) (was "priority one call…"; priorities removed from v1 (owner, 2026-11-02)) |
 | 23 | remind me at half past six in the evening to start dinner | done; today 18:30 |
 | 24 | remind me at midnight tonight to send the form to Dr Okafor | done; 2026-10-28 00:00; speech "at midnight tonight, the start of Wednesday" |
 | 25 | set a timer for 10 minutes | not_mine (Assistant's Clock tool) |

@@ -9,19 +9,16 @@
  */
 package io.github.ijazshare.tasks.ui
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
@@ -52,7 +49,6 @@ import io.github.ijazshare.tasks.data.Reminder
 import io.github.ijazshare.tasks.data.Task
 import io.github.ijazshare.tasks.data.pending
 import io.github.ijazshare.tasks.data.taskMatcher
-import io.github.ijazshare.tasks.ui.theme.TasksColors
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -98,12 +94,6 @@ fun timeText(time: java.time.LocalTime): String = time.format(timeFormat)
 
 @Composable
 fun TaskRow(task: Task, withDate: Boolean, next: Instant?, onOpen: () -> Unit, onComplete: () -> Unit) {
-    val color = when (task.priority) {
-        1 -> TasksColors.Relevant
-        2 -> TasksColors.Asset
-        3 -> TasksColors.Admin
-        else -> TasksColors.Ghost
-    }
     val detail = listOfNotNull(
         task.dueDate?.takeIf { withDate }?.let(::dateText),
         task.dueTime?.let(::timeText),
@@ -114,7 +104,6 @@ fun TaskRow(task: Task, withDate: Boolean, next: Instant?, onOpen: () -> Unit, o
         Modifier.fillMaxWidth().heightIn(min = 56.dp).clickable(onClickLabel = "Open task", onClick = onOpen),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Box(Modifier.width(4.dp).fillMaxHeight().background(color))
         Checkbox(
             checked = false,
             onCheckedChange = { onComplete() },
@@ -247,7 +236,7 @@ fun SearchScreen(
             { q = it },
             Modifier.fillMaxWidth(),
             singleLine = true,
-            label = { Text("Search, or filter: today & p1, overdue | !no date, %tag, #project") },
+            label = { Text("Search, or filter: today & overdue | !no date, %tag, #project") },
         )
         if (q.isNotBlank() && found.isEmpty()) Empty("No match.") else TaskListScreen(found, "", alerts, open, done)
     }

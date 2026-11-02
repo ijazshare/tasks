@@ -20,8 +20,7 @@
 {"utterance":"snooze that for an hour","claim":true,"intent":"reschedule"}
 {"utterance":"delete the gym task","claim":true,"intent":"delete"}
 {"utterance":"remove the gym reminder","claim":true,"intent":"delete"}
-{"utterance":"priority one call the insurer tomorrow morning","claim":true,"intent":"create"}
-{"utterance":"make the gas bill task priority one","claim":true,"intent":"change"}
+{"utterance":"add call the insurer tomorrow morning","claim":true,"intent":"create"}
 {"utterance":"create a list called Garden","claim":true,"intent":"create_project"}
 {"utterance":"create a label called errands","claim":true,"intent":"create_label"}
 {"utterance":"start a brain dump","claim":true,"intent":"ramble"}

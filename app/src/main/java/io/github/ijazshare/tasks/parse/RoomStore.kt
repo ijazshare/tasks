@@ -141,7 +141,7 @@ class RoomStore(context: Context, private val repo: Repository = Repository(cont
         val tags = label?.let { l -> dao.labelByKey(l.name.lowercase())?.id?.let { repo.tagsOf(id) + it } }
         repo.save(
             t.copy(
-                priority = priority ?: t.priority,
+                priority = t.priority,
                 projectId = project?.let {
                     projectId(it)
                 } ?: t.projectId,

@@ -118,7 +118,7 @@ class ContractTest {
         Case("completed", listOf("mark call Amira as done")),
         Case("deleted", listOf("delete the gym task")),
         Case("rescheduled", listOf("move the gym task to Thursday")),
-        Case("updated", listOf("make the gas bill task priority one")),
+        Case("updated", listOf("move the gas bill task to the Home list")),
         Case("listed", listOf("what's on my list today")),
         Case("project-created", listOf("create a list called Garden")),
         Case("label-created", listOf("create a label called errands")),

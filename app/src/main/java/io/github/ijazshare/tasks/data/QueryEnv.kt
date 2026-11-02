@@ -15,7 +15,7 @@ import java.time.LocalDate
 class QueryEnv(val today: LocalDate, val tags: (Task) -> Set<String>, val project: (Task) -> String)
 
 /**
- * Search and the filter subset: `today`, `tomorrow`, `overdue`, `no date`, `p1`-`p4`, `%tag` / `@tag`,
+ * Search and the filter subset: `today`, `tomorrow`, `overdue`, `no date`, `%tag` / `@tag`,
  * `#project` / `##project`, `&`, `|`, `!` and parentheses. Any other word must appear in the title or description,
  * so a plain search is a filter too. Two terms side by side mean "and"; `!` binds tightest, then `&`, then `|`.
  * Text that is not a well-formed query is matched as one plain phrase.
@@ -92,8 +92,6 @@ private class QueryParser(private val toks: List<String>) {
                 i++
                 { t, _ -> t.dueDate == null }
             }
-
-            Regex("p[1-4]").matches(lw) -> { t, _ -> t.priority == lw.drop(1).toInt() }
 
             (lw[0] == '%' || lw[0] == '@') && lw.length > 1 -> { t, e -> lw.drop(1) in e.tags(t) }
 

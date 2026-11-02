@@ -57,6 +57,7 @@ interface TaskStore {
 
     suspend fun reschedule(id: String, due: DueSpec)
 
+    // ponytail: priority stays in the contract for Assistant but is ignored (priorities removed from v1).
     suspend fun change(id: String, priority: Int?, project: String?, label: LabelRef?)
 
     suspend fun addProject(name: String): Boolean
@@ -368,21 +369,17 @@ class CommandHandler(private val store: TaskStore, private val settings: ParseSe
             }
 
             Intent.CHANGE -> {
-                val pri = (r.priority as? SlotValue.Parsed)?.v
                 val proj = (r.project as? SlotValue.Parsed)?.v?.name
                 val label = r.labels.firstOrNull()
-                store.change(task.id, pri, proj, label)
+                store.change(task.id, null, proj, label)
                 remember(client, task.id, now)
                 val what = when {
-                    pri != null -> "priority $pri"
                     proj != null -> "the $proj list"
                     else -> "the ${label?.name} label"
                 }
                 Response(
                     "done",
-                    if (label != null && pri == null &&
-                        proj == null
-                    ) {
+                    if (label != null && proj == null) {
                         "Okay. Added the ${label.name} label to '${task.title}'."
                     } else {
                         "Okay. ${if (proj != null) "Moved" else "Set"} '${task.title}' to $what."

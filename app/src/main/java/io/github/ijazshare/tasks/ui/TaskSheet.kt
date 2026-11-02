@@ -116,7 +116,6 @@ private fun Editor(
     var minutes by rememberSaveable { mutableStateOf(task.dueTime?.let { it.hour * MINUTES_PER_HOUR + it.minute }) }
     // Q3: proposed, unanswered. Floating is the default; this switch makes the time fixed to a zone.
     var keepTime by rememberSaveable { mutableStateOf(task.dueZone != null) }
-    var priority by rememberSaveable { mutableStateOf(task.priority) }
     var projectId by rememberSaveable { mutableStateOf(task.projectId) }
     var tags by rememberSaveable { mutableStateOf(initialTags.toList()) }
     val date = epochDay?.let(LocalDate::ofEpochDay)
@@ -162,8 +161,6 @@ private fun Editor(
         }
         Text("Repeat", style = MaterialTheme.typography.labelLarge)
         ChipRow(presets(date).map { it.first }, preset, enabled = date != null) { preset = it }
-        Text("Priority", style = MaterialTheme.typography.labelLarge)
-        ChipRow(listOf("P1", "P2", "P3", "P4"), priority - 1) { priority = it + 1 }
         Text("Tags", style = MaterialTheme.typography.labelLarge)
         Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             labels.forEach { l ->
@@ -185,7 +182,7 @@ private fun Editor(
                         title = title,
                         description = description,
                         projectId = projectId,
-                        priority = priority,
+                        priority = task.priority,
                         dueDate = date,
                         dueTime = minutes?.let { LocalTime.of(it / MINUTES_PER_HOUR, it % MINUTES_PER_HOUR) },
                         dueZone = if (keepTime) task.dueZone ?: ZoneId.systemDefault().id else null,

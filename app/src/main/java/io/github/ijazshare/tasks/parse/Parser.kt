@@ -255,7 +255,6 @@ private val reAtBare = Regex("\\bat (\\d{1,2}|$NUMW)(?:[ .](\\d{2}))?\\b(?![:.]\
 private val reInPart = Regex("\\bin the (morning|afternoon|evening)\\b")
 
 private val reDeadline = Regex("\\bdeadline\\s+(?:is |on |by )?")
-private val rePriority = Regex("\\bpriority (one|two|three|four|[1-4])\\b|\\bp([1-4])\\b|\\bhigh priority\\b")
 private val reLabelWord = Regex("\\b(?:with the |with )?(?:label|tag|tagged)\\s+(?:as )?([\\p{L}\\p{N}_-]+)")
 private val reListPhrase = Regex("\\b(?:to|on|in|into|onto) (?:my|the) ((?:[\\p{L}\\p{N}'-]+ ){0,3}?)(list|project)\\b")
 private val reCue = Regex("\\b(no wait|no make that|actually|i mean|scratch that|sorry)\\b")
@@ -263,8 +262,6 @@ private val reCue = Regex("\\b(no wait|no make that|actually|i mean|scratch that
 private val WDLIST = "(?:$WD)(?:(?:,|,? and|&) (?:$WD))*"
 
 private fun days(s: String) = Regex("($WD)").findAll(s).map { DayRule(null, weekdays.getValue(it.value)) }.toList()
-
-private val priNames = mapOf("one" to 1, "two" to 2, "three" to 3, "four" to 4)
 
 internal class Scan(val text: String, val ctx: ParseContext) {
     val w = work(text)
@@ -544,16 +541,6 @@ internal fun scanSlots(s: Scan, intent: Intent, d0: Draft): Draft {
         times += Cand(withQual(t, qualOf(m, 3)), m.range)
     }
     for (m in s.findAllFree(reInPart, "time")) times += Cand(TimeRaw(0, 0, TK.NAMED, m.groupValues[1]), m.range)
-
-    // 4.6 priority
-    s.find(rePriority, "priority")?.let { m ->
-        val p = when {
-            m.value == "high priority" -> 2
-            m.groupValues[1].isNotEmpty() -> priNames[m.groupValues[1]] ?: m.groupValues[1].toInt()
-            else -> m.groupValues[2].toInt()
-        }
-        d = d.copy(priority = Cand(p, m.range))
-    }
 
     // 4.7 project, section and label
     if (d.project == null) {
@@ -868,7 +855,6 @@ private fun parseRecTail(s: Scan, key: String, from: Int): Pair<RecSlot, Int>? {
 
 // ---- Stage 3: intent frames and the whole scan -----------------------------------------------------------
 
-private const val PRI_WORDS = "one|two|three|four|[1-4]"
 private val reRamble = Regex("^(?:start a |okay |let's do a |do a )?(?:brain ?dump|ramble)\\b[,.:]?\\s*")
 private val reCreateNamed = Regex("^create (?:a |an |the )?(?:new )?(list|project|label|tag)(?: called| named)? (.+)$")
 private val reQuery = Regex(
@@ -889,14 +875,12 @@ private val reSnooze = Regex("^snooze (.+?)(?: for)? ($DURBODY)$")
 private val reMove =
     Regex("^(?:move|push|reschedule|postpone|put off|shift) (.+?)(?: back)? (?:to|until|till|for|by) (.+)$")
 private val reMoveList = Regex("^(?:the |my )?(.+?) (?:list|project)$")
-private val reChangePri = Regex("^(?:make|set) (.+?)(?: to| as)? (?:priority|p) ?($PRI_WORDS)$")
 private val reAddLabel = Regex("^(?:add|put) (?:the )?(?:label|tag) (\\S+) (?:to|on) (.+)$")
 private val reRemind = Regex("^(?:(urgent(?:ly)?)[, ]+)?remind me\\b")
 private val reAdd =
     Regex(
         "^(?:add|put) (?:(?:a |an )?(?:new )?task(?: to| that| called| for)? )?|^(?:new|create (?:a )?) ?task(?: to| that| called| for)? |^make a task(?: to| that| for)? ",
     )
-private val reLeadPri = Regex("^(?:priority ($PRI_WORDS)|p([1-4]))\\b")
 private val referents = setOf("it", "that", "this", "that one", "this one", "the last one", "that task", "it again")
 
 private fun tgt(s: String): Target = if (s.trim() in referents) Target.Referent else Target.Words(s.trim())
@@ -1011,15 +995,6 @@ fun scan(text: String, ctx: ParseContext): Draft {
                 labels = listOf(Cand(text.substring(l.range.first + start, l.range.last + 1 + start), off(l.range))),
             )
         }
-        reChangePri.find(body)?.let { m ->
-            val g = m.groups[1]!!
-            val p = priNames[m.groupValues[2]] ?: m.groupValues[2].toInt()
-            return d.copy(
-                intent = Intent.CHANGE,
-                target = tgt(text.substring(g.range.first + start, g.range.last + 1 + start)),
-                priority = Cand(p, off(m.range)),
-            )
-        }
         reMove.find(body)?.let { m ->
             val g = m.groups[1]!!
             val whenG = m.groups[2]!!
@@ -1071,7 +1046,6 @@ fun scan(text: String, ctx: ParseContext): Draft {
                 s.take(off(m.range))
             }
         }
-        reLeadPri.find(body)?.let { isCreate = true }
     }
     if (!isCreate) return d
     d = d.copy(intent = Intent.CREATE, remindMe = remind, tags = tagNames)
