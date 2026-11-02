@@ -138,13 +138,18 @@ class RemindersTest {
         val now = Instant.parse("2026-11-10T12:00:00Z")
         val hour = Duration.ofHours(1)
         // Urgent, 1 h alert: Snooze 1 h would be the at-due alert itself.
-        assertThat(Reminders.snoozeUntil(now, hour, listOf(now.plus(hour)))).isNull()
-        assertThat(Reminders.snoozeUntil(now, hour, listOf(now.plusSeconds(3599)))).isNull()
-        assertThat(Reminders.snoozeUntil(now, hour, listOf(now.plusSeconds(3601)))).isEqualTo(now.plus(hour))
-        assertThat(Reminders.snoozeUntil(now, hour, emptyList())).isEqualTo(now.plus(hour))
-        assertThat(Reminders.snoozeUntil(now, hour, listOf(now.minusSeconds(5)))).isEqualTo(now.plus(hour))
-        // A nag every ten minutes always wins over a 15 min or 1 h snooze.
-        assertThat(Reminders.snoozeUntil(now, Duration.ofMinutes(15), listOf(now.plusSeconds(600)))).isNull()
+        assertThat(Reminders.snoozeUntil(BEFORE_DUE, now, hour, listOf(now.plus(hour)))).isNull()
+        assertThat(Reminders.snoozeUntil(BEFORE_DUE, now, hour, listOf(now.plusSeconds(3599)))).isNull()
+        assertThat(
+            Reminders.snoozeUntil(BEFORE_DUE, now, hour, listOf(now.plusSeconds(3601))),
+        ).isEqualTo(now.plus(hour))
+        assertThat(Reminders.snoozeUntil(BEFORE_DUE, now, hour, emptyList())).isEqualTo(now.plus(hour))
+        assertThat(Reminders.snoozeUntil(BEFORE_DUE, now, hour, listOf(now.minusSeconds(5)))).isEqualTo(now.plus(hour))
+        // At-due and nag snoozes are never replaced: they pause the nagging.
+        assertThat(Reminders.snoozeUntil(AT_DUE, now, hour, listOf(now.plusSeconds(600)))).isEqualTo(now.plus(hour))
+        assertThat(Reminders.snoozeUntil(NAG, now, Duration.ofMinutes(15), listOf(now.plusSeconds(600))))
+            .isEqualTo(now.plus(Duration.ofMinutes(15)))
+        assertThat(Reminders.nagResume(now.plus(hour), 10)).isEqualTo(now.plus(hour).plusSeconds(600))
     }
 
     @Test fun everyDerivedAlertIsAheadOfNowAndUniquePerKind() {

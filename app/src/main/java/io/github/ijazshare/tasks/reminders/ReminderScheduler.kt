@@ -20,7 +20,6 @@ import androidx.room.withTransaction
 import io.github.ijazshare.tasks.data.Reminder
 import io.github.ijazshare.tasks.data.Task
 import io.github.ijazshare.tasks.data.TasksDb
-import io.github.ijazshare.tasks.data.due
 import io.github.ijazshare.tasks.time.AlertType
 import io.github.ijazshare.tasks.time.Reminders
 import io.github.ijazshare.tasks.time.Schedule
@@ -30,7 +29,6 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.time.Instant
-import java.time.ZoneId
 
 /**
  * One exact "next due" alarm (spec 8.4). [rearm] is the only place that delivers or arms: it
@@ -46,7 +44,6 @@ class ReminderScheduler(private val context: Context) {
             val db = TasksDb.get(context)
             val dao = db.dao()
             val now = Instant.now()
-            val zone = ZoneId.systemDefault()
             var next: Instant? = null
             val toShow = mutableListOf<Shown>()
             db.withTransaction {
@@ -68,7 +65,7 @@ class ReminderScheduler(private val context: Context) {
                     var done = a.afterDelivery(kind)
                     // A nag is never done: after each one the next slot is armed (8.6 rule 4).
                     if (kind != Scheduling.Kind.AGAIN && r.kind == AlertType.NAG.name) {
-                        val slot = nextNag(task, schedule, now, zone)
+                        val slot = resume(schedule, now)
                         done = done.copy(snoozedUntil = slot, fireAt = slot)
                     }
                     r.copy(
@@ -95,11 +92,7 @@ class ReminderScheduler(private val context: Context) {
         }
     }
 
-    private fun nextNag(task: Task, schedule: Schedule, now: Instant, zone: ZoneId) = Reminders.nextNag(
-        Reminders.dueInstant(checkNotNull(task.due()), zone),
-        schedule.nagMin ?: NAG_MIN,
-        now,
-    )
+    private fun resume(schedule: Schedule, now: Instant) = Reminders.nagResume(now, schedule.nagMin ?: NAG_MIN)
 
     private fun fireAt(r: Reminder) = checkNotNull(r.snoozedUntil ?: r.atInstant ?: r.nextFireAt)
 

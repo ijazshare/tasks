@@ -13,6 +13,7 @@ import android.app.NotificationManager
 import android.content.Context
 import android.service.notification.StatusBarNotification
 import androidx.test.platform.app.InstrumentationRegistry
+import com.google.common.collect.Range
 import com.google.common.truth.Truth.assertThat
 import io.github.ijazshare.tasks.data.INBOX_ID
 import io.github.ijazshare.tasks.data.Reminder
@@ -231,36 +232,50 @@ class ReminderMachineryTest {
     }
 
     // ---- 10 ----
-    @Test fun urgentNagsEveryTenMinutesUntilDoneAndSnoozeCannotSkipANag() = runBlocking {
+    @Test fun urgentNagsEveryTenMinutesUntilDoneAndSnoozePausesThem() = runBlocking {
         val t = create("nag", in_(3), urgent = true)
         val dueAt = repo.task(t.id)!!.let { Instant.from(it.dueDate!!.atTime(it.dueTime!!).atZone(zone)) }
         assertThat(rows(t, "NAG").single().atInstant).isEqualTo(dueAt.plusSeconds(600))
         val atDue = awaitNotification(t, 15)
         assertThat(text(atDue)).startsWith("now")
         assertThat(buttons(atDue)).containsExactly("Done", "Snooze 15 min", "Snooze 1 h").inOrder()
-        nm.cancel(Notifications.id(t.id))
+        // Snooze 15 min on the at-due alert pauses the nagging: the nag now waits for the snooze alert.
+        val before = Instant.now()
+        press(t, "Snooze 15 min")
+        awaitGone(t)
+        waitFor("at-due snoozed") { rows(t, "AT_DUE").single().snoozedUntil != null }
+        val snoozed = rows(t, "AT_DUE").single().snoozedUntil!!
+        assertThat(snoozed).isAtLeast(before.plus(Duration.ofMinutes(15)))
+        assertThat(rows(t, "NAG").single().atInstant).isEqualTo(snoozed.plusSeconds(600))
         // Ten minutes compressed to seconds: the nag row is moved to 4 s from now.
         setTime(t, "NAG", null, in_(4))
         val nag1 = awaitNotification(t, 15)
         assertThat(text(nag1)).startsWith("overdue")
         assertThat(buttons(nag1)).containsExactly("Done", "Snooze 15 min", "Snooze 1 h").inOrder()
+        // The next nag is already armed, ten minutes after this one.
         val armed = rows(t, "NAG").single()
         assertThat(armed.lastFiredAt).isNotNull()
-        // The next nag is already armed, on the due + k * 10 min grid, at most ten minutes ahead.
-        val next = armed.snoozedUntil!!
-        assertThat(next).isGreaterThan(Instant.now())
-        assertThat(next).isAtMost(Instant.now().plusSeconds(600))
-        assertThat(Duration.between(dueAt, next).seconds % 600).isEqualTo(0)
+        assertThat(Duration.between(Instant.now(), armed.snoozedUntil!!).seconds).isIn(Range.closed(585L, 600L))
         assertAlarm(t)
-        // Snooze 1 h would land after that nag, so the nag stays as it is.
+        // Snooze 1 h on a nag is not replaced by the next nag: nothing fires until it ends.
         press(t, "Snooze 1 h")
         awaitGone(t)
-        waitFor("snooze handled") { !rows(t, "NAG").single().unseen }
-        assertThat(rows(t, "NAG").single().snoozedUntil).isEqualTo(next)
-        // And the nagging goes on until Done, whatever the hour.
-        setTime(t, "NAG", null, in_(3))
-        val nag2 = awaitNotification(t, 15)
-        assertThat(nag2.postTime).isGreaterThan(nag1.postTime)
+        waitFor("nag snoozed") {
+            Duration.between(Instant.now(), rows(t, "NAG").single().snoozedUntil!!).toMinutes() >=
+                59
+        }
+        delay(3_000)
+        assertThat(find(t)).isNull()
+        // Second-scale: end that snooze in 5 s. The snooze alert fires with the same buttons, and
+        // nagging resumes ten minutes after that moment.
+        repo.snooze(rows(t, "NAG").single().id, Duration.ofSeconds(5))
+        val back = awaitNotification(t, 20)
+        assertThat(text(back)).startsWith("overdue")
+        assertThat(buttons(back)).containsExactly("Done", "Snooze 15 min", "Snooze 1 h").inOrder()
+        assertThat(back.postTime).isGreaterThan(nag1.postTime)
+        waitFor("nag resumed") { rows(t, "NAG").single().let { it.snoozedUntil != null && it.lastFiredAt != null } }
+        assertThat(Duration.between(Instant.now(), rows(t, "NAG").single().snoozedUntil!!).seconds)
+            .isIn(Range.closed(585L, 600L))
         press(t, "Done")
         awaitGone(t)
         waitFor("completed") { repo.task(t.id)?.completedAt != null }

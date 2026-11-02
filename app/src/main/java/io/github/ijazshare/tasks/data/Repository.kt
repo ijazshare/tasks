@@ -202,8 +202,29 @@ class Repository(private val context: Context) {
             val others = dao.remindersOf(r.taskId).filter {
                 it.deletedAt == null && it.pending() && (it.id != r.id || it.kind == AlertType.NAG.name)
             }.mapNotNull { it.snoozedUntil ?: it.atInstant ?: it.nextFireAt }
-            val until = Reminders.snoozeUntil(now, length, others) ?: r.snoozedUntil
-            dao.upsert(listOf(r.copy(snoozedUntil = until, unseen = false, updatedAt = now)))
+            val type = AlertType.valueOf(r.kind)
+            val until = Reminders.snoozeUntil(type, now, length, others) ?: r.snoozedUntil
+            val rows = mutableListOf(r.copy(snoozedUntil = until, unseen = false, updatedAt = now))
+            // Snoozing an at-due alert pauses the nagging too: it resumes after the snooze alert.
+            if (type == AlertType.AT_DUE && until != null) {
+                val nagMin = Schedule.pick(
+                    dao.schedules(r.taskId).mapNotNull {
+                        Schedule.parse(it.scheduleJson)
+                    },
+                ).nagMin
+                dao.remindersOf(r.taskId).filter { it.deletedAt == null && it.kind == AlertType.NAG.name }.forEach {
+                    val at = Reminders.nagResume(until, nagMin ?: Schedule.URGENT.nagMin!!)
+                    rows +=
+                        it.copy(
+                            atInstant = at,
+                            nextFireAt = at,
+                            lastFiredAt = null,
+                            snoozedUntil = null,
+                            updatedAt = now,
+                        )
+                }
+            }
+            dao.upsert(rows)
         }
         scheduler.rearm()
     }

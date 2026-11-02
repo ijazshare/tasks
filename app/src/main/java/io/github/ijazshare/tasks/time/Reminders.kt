@@ -123,14 +123,19 @@ object Reminders {
         type != AlertType.BEFORE_DUE || offsetMin!! <= SNOOZE_WITHIN_MIN
 
     /**
-     * When a snooze of [length] ends, or null if it would land on or after the next pending alert
-     * ([others]): that alert then simply comes first and two never stack (rule 5).
+     * When a snooze of [length] from an alert of [type] ends. A before-due alert's snooze that
+     * would land on or after the next pending alert ([others]) is replaced by it: null, and that
+     * alert simply comes first (rule 5). An at-due or nag snooze is never replaced: it pauses the
+     * nagging until it ends.
      */
-    fun snoozeUntil(now: Instant, length: Duration, others: List<Instant>): Instant? {
+    fun snoozeUntil(type: AlertType, now: Instant, length: Duration, others: List<Instant>): Instant? {
         val target = now.plus(length)
         val next = others.filter { it > now }.minOrNull()
-        return if (next != null && target >= next) null else target
+        return if (type == AlertType.BEFORE_DUE && next != null && target >= next) null else target
     }
+
+    /** Nagging resumes [nagMin] after [from]: the moment a nag or a snooze alert fires. */
+    fun nagResume(from: Instant, nagMin: Int): Instant = from.plus(Duration.ofMinutes(nagMin.toLong()))
 
     fun phrase(type: AlertType, offsetMin: Int?): String = when (type) {
         AlertType.AT_DUE -> "now"
