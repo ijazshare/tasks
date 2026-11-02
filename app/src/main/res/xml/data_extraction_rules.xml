@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The task database holds the user's own words, so Google's cloud backup gets nothing.
+  Device-to-device transfer (cable or local link) keeps everything. The user's backup is
+  the JSON export.
+-->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="database" path="." />
+    </cloud-backup>
+</data-extraction-rules>
