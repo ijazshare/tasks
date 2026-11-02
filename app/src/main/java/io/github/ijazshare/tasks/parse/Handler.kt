@@ -456,6 +456,7 @@ class CommandHandler(private val store: TaskStore, private val settings: ParseSe
     private fun query(req: Request, ctx: ParseContext, r: ParseResult): Response {
         val today = ctx.today
         val scope = r.scope ?: "all"
+        if (scope == "find") return find(req, ctx, r)
         val project = (r.project as? SlotValue.Parsed)?.v?.name
         var items = ctx.openTasks.filter { project == null || it.project.equals(project, true) }
         items = when {
@@ -513,6 +514,20 @@ class CommandHandler(private val store: TaskStore, private val settings: ParseSe
         return Response("done", speech, Intent.QUERY, effect = "listed", parse = r, items = items)
     }
 
+    private fun find(req: Request, ctx: ParseContext, r: ParseResult): Response {
+        val q = tokens((r.target as? Target.Words)?.text.orEmpty())
+        val hits = if (q.isEmpty()) emptyList() else ctx.openTasks.filter { contains(tokens(it.title), q) }
+        val speech = if (hits.isEmpty()) {
+            "No task like that."
+        } else {
+            "Yes: " + hits.take(SPOKEN_LIMIT).joinToString("; ") { t ->
+                t.title + (t.due?.let { ", ${whenSay(it, ctx)}" } ?: "")
+            } + (if (hits.size > SPOKEN_LIMIT) ", and ${hits.size - SPOKEN_LIMIT} more." else ".")
+        }
+        if (hits.size == 1) remember(req.client, hits.single().id, ctx.now.toInstant())
+        return Response("done", speech, Intent.QUERY, effect = "listed", parse = r, items = hits)
+    }
+
     // ---- speech ---------------------------------------------------------------------------------------
 
     private fun lcFirst(title: String, text: String, r: ParseResult): String {
@@ -557,7 +572,7 @@ private val STOP =
     setOf("a", "an", "the", "my", "to", "at", "on", "in", "for", "of", "about", "with", "task", "reminder", "list")
 
 internal fun tokens(s: String): Set<String> = work(s).replace(Regex("['’]s\\b"), "").split(Regex("[^\\p{L}\\p{N}]+"))
-    .filter { it.isNotEmpty() && it !in STOP }.toSet()
+    .filter { it.isNotEmpty() && it !in STOP }.map(::tokenStem).toSet()
 
 private fun same(a: String, b: String) = a == b || (a.length >= 5 && b.length >= 5 && dl(a, b) <= 1)
 
@@ -585,6 +600,13 @@ private fun lcFirstTitle(t: String): String = if (t.substringBefore(' ').drop(1)
     t.replaceFirstChar { it.lowercase() }
 } else {
     t
+}
+
+private fun tokenStem(w: String) = when {
+    w.length > 5 && w.endsWith("ing") -> w.dropLast(3)
+    w.length > 4 && w.endsWith("ed") -> w.dropLast(2)
+    w.length > 3 && w.endsWith("s") && !w.endsWith("ss") -> w.dropLast(1)
+    else -> w
 }
 
 private fun matchTask(ref: String, open: List<OpenTask>): Match {
@@ -678,6 +700,7 @@ private fun answer(d: Draft, q: Question, text: String, lower: String, ctx: Pars
         }
 
         "choice" -> {
+            if ("inbox" in lower && q.text.contains("Create it")) return next(q.options.last().next)
             optionMatch(lower, q.options)?.let { return next(it.next) }
             if (yes) return next(q.options.first().next)
             if (no && q.text.contains("Create it")) return next(q.options.last().next)

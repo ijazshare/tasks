@@ -448,7 +448,7 @@ seed case.
 | An explicit time today that has passed (8.3) | "1 pm today has passed. Tomorrow at 1 pm?" | `confirm` |
 | A past explicit date (8.3) | "3 October has passed. Do you mean next year?" | `confirm` |
 | Self-correction inside one utterance (6.1 step 7) | Both readings ("Tomorrow at 5 pm, or Friday at 5 pm?") | `choice` |
-| Unknown project or list named | "I don't have a Garden list. Create it, or put this in Inbox?" | `choice` |
+| Unknown project or list named | "I don't have a Garden list. Create it, or add it without a list?" | `choice` |
 | Unknown label named | "I don't have an 'errands' label. Create it, or leave it off?" | `choice` |
 | Unknown section in a known project | "Home has no 'Garden' section. Put it in Home without a section?" | `confirm` |
 | 2 or 3 tasks match complete/reschedule/delete (6.1 step 5) | "Which one: call Amira about the party, or call Amira's dentist?" | `task` |
@@ -1617,7 +1617,7 @@ Seed cases. All have now = **Tue 27 Oct 2026 14:03, Europe/London (GMT), h12**, 
 | 4 | remind me to take my vitamins every day at 9am | done; DAILY 09:00, first due **2026-10-28** (9 am passed; a recurrence takes the next occurrence) |
 | 5 | remind me next Friday to renew the parking permit | needs_input expects=date; options Fri 30 Oct / Fri 6 Nov |
 | 6 | (now 03:10) remind me at 5 to feed the cat | needs_input expects=time; "5 in the morning or the evening?" (night rule) |
-| 7 | add prune the roses to the garden list | needs_input expects=choice; "I don't have a Garden list. Create it, or put this in Inbox?" |
+| 7 | add prune the roses to the garden list | needs_input expects=choice; "I don't have a Garden list. Create it, or add it without a list?" |
 | 8 | remind me to water the plants | needs_input expects=date_time; "When should I remind you?" |
 | 9 | add water the plants to my list | done; Inbox, no due, no question |
 | 10 | remind me to call Bilal on 555-0142 tomorrow at noon | done; "Call Bilal on 555-0142", 2026-10-28 12:00. The number is not a time |

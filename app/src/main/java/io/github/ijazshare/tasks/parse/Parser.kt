@@ -863,7 +863,7 @@ private val reQuery = Regex(
         "my tasks|my to-?do list|to-?do list|what(?:'s| is) overdue|is anything overdue)\\b",
 )
 private val completeRes = listOf(
-    Regex("^mark (.+?) (?:as )?(?:done|complete|completed|finished)$"),
+    Regex("^mark (.+?) (?:as |has )?(?:done|complete|completed|finished)$"),
     Regex("^(?:tick|cross|check) off (.+)$"),
     Regex("^(?:tick|cross|check) (.+?) off$"),
     Regex("^(?:complete|finish) (.+)$"),
@@ -874,6 +874,16 @@ private val reDelete = Regex("^(?:delete|remove|scrap) (.+?)(?: from my (?:list|
 private val reSnooze = Regex("^snooze (.+?)(?: for)? ($DURBODY)$")
 private val reMove =
     Regex("^(?:move|push|reschedule|postpone|put off|shift) (.+?)(?: back)? (?:to|until|till|for|by) (.+)$")
+
+// "push the watering task tomorrow": no "to", so only a referent ("it", "the X task") may stand before the date.
+private val reMoveBare =
+    Regex(
+        "^(?:move|push|reschedule|postpone|put off|shift) (it|that|this|that task|(?:the )?\\p{L}+ task)(?: back)? (.+)$",
+    )
+private val reFind = Regex(
+    "^(?:is there|are there|do i have|have i got)(?: an?| any| some)? (?:tasks?|reminders?)(?: or (?:tasks?|reminders?))? " +
+        "(?:to|about|for|called|named|like) (.+?)\\??$",
+)
 private val reMoveList = Regex("^(?:the |my )?(.+?) (?:list|project)$")
 private val reAddLabel = Regex("^(?:add|put) (?:the )?(?:label|tag) (\\S+) (?:to|on) (.+)$")
 private val reRemind = Regex("^(?:(urgent(?:ly)?)[, ]+)?remind me\\b")
@@ -936,6 +946,14 @@ fun scan(text: String, ctx: ParseContext): Draft {
                 ).trim(),
             )
         }
+        reFind.find(body)?.let { m ->
+            val g = m.groups[1]!!
+            return d.copy(
+                intent = Intent.QUERY,
+                scope = "find",
+                target = Target.Words(text.substring(g.range.first + start, g.range.last + 1 + start)),
+            )
+        }
         reQuery.find(body)?.let { m ->
             s.take(off(m.range))
             d = d.copy(intent = Intent.QUERY)
@@ -995,7 +1013,7 @@ fun scan(text: String, ctx: ParseContext): Draft {
                 labels = listOf(Cand(text.substring(l.range.first + start, l.range.last + 1 + start), off(l.range))),
             )
         }
-        reMove.find(body)?.let { m ->
+        (reMove.find(body) ?: reMoveBare.find(body))?.let { m ->
             val g = m.groups[1]!!
             val whenG = m.groups[2]!!
             val ref = tgt(text.substring(g.range.first + start, g.range.last + 1 + start))

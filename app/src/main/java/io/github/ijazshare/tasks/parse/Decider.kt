@@ -399,10 +399,10 @@ internal object Decider {
                         d0,
                         ctx,
                         "choice",
-                        "I don't have ${article(tc)} $tc list. Create it, or put this in Inbox?",
+                        "I don't have ${article(tc)} $tc list. Create it, or add it without a list?",
                         listOf(
                             optionOf(1, "Create it", d0.copy(confirmed = d0.confirmed + "project:create")),
-                            optionOf(2, "Inbox", d0.copy(confirmed = d0.confirmed + "project:inbox")),
+                            optionOf(2, "Without a list", d0.copy(confirmed = d0.confirmed + "project:inbox")),
                         ),
                     )
                 }
