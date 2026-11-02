@@ -13,6 +13,7 @@ import android.content.Intent
 import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
@@ -227,6 +228,16 @@ private fun TasksApp(
         scope.launch { repo.opened(it.id) }
     }
     val done: (io.github.ijazshare.tasks.data.Task) -> Unit = { scope.launch { repo.complete(it.id) } }
+
+    // System back closes whichever overlay is showing (console, setup, missed, search, completed).
+    BackHandler(enabled = console || setup || showMissed || mode != null) {
+        when {
+            console -> console = false
+            setup -> setup = false
+            showMissed -> showMissed = false
+            else -> mode = null
+        }
+    }
 
     Scaffold(
         bottomBar = {
