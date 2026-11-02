@@ -25,6 +25,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -33,6 +34,8 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import io.github.ijazshare.tasks.parse.CommandHandler
@@ -51,9 +54,25 @@ import java.time.ZonedDateTime
  * (needs_input) shows its options under the field and the next send answers it.
  */
 @Composable
-fun QuickAddBar(handler: CommandHandler, projects: List<String>, labels: List<String>) {
+fun QuickAddBar(
+    handler: CommandHandler,
+    projects: List<String>,
+    labels: List<String>,
+    prefill: String? = null,
+    focusTick: Int = 0,
+    onPrefilled: () -> Unit = {},
+) {
     val scope = rememberCoroutineScope()
     var text by rememberSaveable { mutableStateOf("") }
+    val focus = remember { FocusRequester() }
+    // A share fills the field and waits for the user to press Add; the tile and shortcut just focus it.
+    LaunchedEffect(prefill) {
+        if (prefill != null) {
+            text = prefill
+            onPrefilled()
+        }
+    }
+    LaunchedEffect(focusTick) { if (focusTick > 0 || prefill != null) focus.requestFocus() }
     var plain by rememberSaveable { mutableStateOf(emptyList<String>()) }
     var reply by remember { mutableStateOf<Response?>(null) }
     val live = remember(text, plain, projects, labels) {
@@ -100,7 +119,7 @@ fun QuickAddBar(handler: CommandHandler, projects: List<String>, labels: List<St
         OutlinedTextField(
             value = text,
             onValueChange = { text = it },
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier.fillMaxWidth().focusRequester(focus),
             singleLine = true,
             label = {
                 Text(
@@ -146,3 +165,18 @@ fun QuickAddBar(handler: CommandHandler, projects: List<String>, labels: List<St
         }
     }
 }
+
+/**
+ * The quick-add text for a share: the subject (or the first line) is the title and the rest becomes the description
+ * with the parser's ` // ` marker, all on one line and capped so a pasted article cannot flood the field.
+ */
+fun sharedToQuickAdd(subject: String?, text: String?): String {
+    val lines = (text ?: "").lines().map { it.trim() }.filter { it.isNotEmpty() }
+    val subj = subject?.trim().orEmpty()
+    val title = subj.ifEmpty { lines.firstOrNull().orEmpty() }
+    val rest = (if (subj.isEmpty()) lines.drop(1) else lines).joinToString(" ")
+    val line = if (rest.isEmpty() || rest == title) title else "$title // $rest"
+    return line.take(SHARE_MAX)
+}
+
+private const val SHARE_MAX = 500

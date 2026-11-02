@@ -36,6 +36,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -43,11 +44,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import io.github.ijazshare.tasks.data.Completion
 import io.github.ijazshare.tasks.data.Label
 import io.github.ijazshare.tasks.data.Project
+import io.github.ijazshare.tasks.data.QueryEnv
 import io.github.ijazshare.tasks.data.Reminder
 import io.github.ijazshare.tasks.data.Task
 import io.github.ijazshare.tasks.data.pending
+import io.github.ijazshare.tasks.data.taskMatcher
 import io.github.ijazshare.tasks.ui.theme.TasksColors
 import java.time.Instant
 import java.time.LocalDate
@@ -224,6 +228,48 @@ fun TaskListScreen(
 ) {
     if (tasks.isEmpty()) return Empty(empty)
     LazyColumn(Modifier.fillMaxSize()) { rows(tasks, withDate, alerts, open, done) }
+}
+
+/** Search and filters (see [taskMatcher]) over every open task. */
+@Composable
+fun SearchScreen(
+    tasks: List<Task>,
+    env: QueryEnv,
+    alerts: Map<String, Instant>,
+    open: (Task) -> Unit,
+    done: (Task) -> Unit,
+) {
+    var q by rememberSaveable { mutableStateOf("") }
+    val found = remember(q, tasks, env) { if (q.isBlank()) emptyList() else tasks.filter { taskMatcher(q)(it, env) } }
+    Column(Modifier.fillMaxSize()) {
+        OutlinedTextField(
+            q,
+            { q = it },
+            Modifier.fillMaxWidth(),
+            singleLine = true,
+            label = { Text("Search, or filter: today & p1, overdue | !no date, %tag, #project") },
+        )
+        if (q.isNotBlank() && found.isEmpty()) Empty("No match.") else TaskListScreen(found, "", alerts, open, done)
+    }
+}
+
+/** What was ticked off, newest first (the last 200). */
+@Composable
+fun CompletedScreen(items: List<Completion>) {
+    if (items.isEmpty()) return Empty("Nothing completed yet.")
+    LazyColumn(Modifier.fillMaxSize()) {
+        items(items) {
+            val at = it.at.atZone(ZoneId.systemDefault())
+            Column(Modifier.fillMaxWidth().heightIn(min = 56.dp).padding(vertical = 8.dp)) {
+                Text(it.title, style = MaterialTheme.typography.bodyLarge)
+                Text(
+                    "${dateText(at.toLocalDate())} ${timeText(at.toLocalTime())}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+    }
 }
 
 @Composable

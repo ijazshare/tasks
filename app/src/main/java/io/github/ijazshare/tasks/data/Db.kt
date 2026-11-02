@@ -156,6 +156,9 @@ data class CompletionLog(
     val imported: Boolean,
 )
 
+/** One line of the Completed screen. */
+data class Completion(val taskId: String, val title: String, val at: Instant)
+
 @Entity(tableName = "undo_journal")
 data class UndoJournal(
     @PrimaryKey val token: String,

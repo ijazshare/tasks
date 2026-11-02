@@ -57,6 +57,8 @@ class Repository(private val context: Context) {
 
     fun missed(): Flow<List<Task>> = dao.missed()
 
+    fun completed(): Flow<List<Completion>> = dao.completed()
+
     fun labels(): Flow<List<Label>> = dao.labels()
 
     fun taskLabels(): Flow<List<TaskLabel>> = dao.taskLabels()

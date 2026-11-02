@@ -224,6 +224,14 @@ interface TasksDao {
     @Insert
     suspend fun insertAll(logs: List<CompletionLog>)
 
+    /** Completions, newest first: one-off tasks by their completedAt, recurring ones by their log rows. */
+    @Query(
+        "SELECT id AS taskId, title, completedAt AS at FROM task WHERE completedAt IS NOT NULL AND deletedAt IS NULL " +
+            "UNION ALL SELECT l.taskId, t.title, l.completedAt FROM completion_log l JOIN task t ON t.id = l.taskId " +
+            "WHERE t.deletedAt IS NULL ORDER BY at DESC LIMIT 200",
+    )
+    fun completed(): Flow<List<Completion>>
+
     @Query("SELECT * FROM project WHERE id = :id")
     suspend fun projectById(id: String): Project?
 

@@ -49,16 +49,19 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import io.github.ijazshare.tasks.data.Export
 import io.github.ijazshare.tasks.data.INBOX_ID
+import io.github.ijazshare.tasks.data.QueryEnv
 import io.github.ijazshare.tasks.data.Repository
 import io.github.ijazshare.tasks.data.TasksDb
 import io.github.ijazshare.tasks.parse.CommandHandler
 import io.github.ijazshare.tasks.parse.RoomStore
 import io.github.ijazshare.tasks.reminders.Notifications.EXTRA_MISSED
 import io.github.ijazshare.tasks.reminders.Notifications.EXTRA_TASK
+import io.github.ijazshare.tasks.ui.CompletedScreen
 import io.github.ijazshare.tasks.ui.ConsoleScreen
 import io.github.ijazshare.tasks.ui.HAS_CONSOLE
 import io.github.ijazshare.tasks.ui.NEW_TASK
 import io.github.ijazshare.tasks.ui.QuickAddBar
+import io.github.ijazshare.tasks.ui.SearchScreen
 import io.github.ijazshare.tasks.ui.SetupScreen
 import io.github.ijazshare.tasks.ui.SetupState
 import io.github.ijazshare.tasks.ui.TagFilter
@@ -67,6 +70,7 @@ import io.github.ijazshare.tasks.ui.TaskSheet
 import io.github.ijazshare.tasks.ui.TodayScreen
 import io.github.ijazshare.tasks.ui.UpcomingScreen
 import io.github.ijazshare.tasks.ui.nextAlerts
+import io.github.ijazshare.tasks.ui.sharedToQuickAdd
 import io.github.ijazshare.tasks.ui.theme.TasksTheme
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -76,6 +80,19 @@ import java.time.LocalDate
 
 class MainActivity : ComponentActivity() {
     private val openTask = mutableStateOf<Launch?>(null)
+    private val prefill = mutableStateOf<String?>(null)
+    private val focusTick = mutableIntStateOf(0)
+
+    /** A share fills quick-add (the user confirms with Add); the tile and the shortcut just focus it. */
+    private fun Intent.quickAdd() {
+        when {
+            action == Intent.ACTION_SEND && type == "text/plain" ->
+                prefill.value =
+                    sharedToQuickAdd(getStringExtra(Intent.EXTRA_SUBJECT), getStringExtra(Intent.EXTRA_TEXT))
+
+            action == ACTION_QUICK_ADD -> focusTick.intValue++
+        }
+    }
 
     private fun Intent.launch() = getStringExtra(EXTRA_TASK)?.let { Launch(it, getBooleanExtra(EXTRA_MISSED, false)) }
 
@@ -85,12 +102,14 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         openTask.value = intent.launch()
-        setContent { TasksTheme { TasksApp(openTask, resumes.intValue) } }
+        if (savedInstanceState == null) intent.quickAdd()
+        setContent { TasksTheme { TasksApp(openTask, resumes.intValue, prefill, focusTick.intValue) } }
     }
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         openTask.value = intent.launch()
+        intent.quickAdd()
     }
 
     override fun onResume() {
@@ -103,12 +122,18 @@ class MainActivity : ComponentActivity() {
 private data class Launch(val taskId: String, val missed: Boolean)
 
 private val tabs = listOf("Today", "Tomorrow", "Upcoming")
+const val ACTION_QUICK_ADD = "io.github.ijazshare.tasks.QUICK_ADD"
 private const val MISSED_TITLE = "Missed"
 private const val CLOCK_POLL_MS = 60_000L
 
 @Composable
 @Suppress("ComplexCondition")
-private fun TasksApp(openTask: androidx.compose.runtime.MutableState<Launch?>, resumes: Int) {
+private fun TasksApp(
+    openTask: androidx.compose.runtime.MutableState<Launch?>,
+    resumes: Int,
+    prefill: androidx.compose.runtime.MutableState<String?>,
+    focusTick: Int,
+) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val repo = remember { Repository(context) }
@@ -132,6 +157,14 @@ private fun TasksApp(openTask: androidx.compose.runtime.MutableState<Launch?>, r
     val missed by remember { repo.missed() }.collectAsState(emptyList())
     var filter by rememberSaveable { mutableStateOf(emptyList<String>()) }
     var showMissed by rememberSaveable { mutableStateOf(false) }
+    var mode by rememberSaveable { mutableStateOf<String?>(null) }
+    val completed by remember { repo.completed() }.collectAsState(emptyList())
+    val env = remember(today, tagLinks, labels, projects) {
+        val tagNames = labels.associate { it.id to it.nameKey }
+        val byTask = tagLinks.groupBy({ it.taskId }, { tagNames[it.labelId] ?: "" }).mapValues { it.value.toSet() }
+        val projectNames = projects.associate { it.id to it.nameKey }
+        QueryEnv(today, { byTask[it.id].orEmpty() }, { projectNames[it.projectId].orEmpty() })
+    }
     val next = remember(alerts) { nextAlerts(alerts) }
     val shown = remember(dated, tagLinks, filter) {
         if (filter.isEmpty()) {
@@ -151,6 +184,16 @@ private fun TasksApp(openTask: androidx.compose.runtime.MutableState<Launch?>, r
         }
     }
     val needsSetup = remember(resumes) { !SetupState.read(context).complete }
+
+    // Quick-add from a share, the tile or the shortcut: leave any other screen so the bar is on show.
+    LaunchedEffect(prefill.value, focusTick) {
+        if (prefill.value != null || focusTick > 0) {
+            setup = false
+            showMissed = false
+            console = false
+            mode = null
+        }
+    }
 
     // Tapped notification: a Missed one opens the Missed list, any other opens its task.
     LaunchedEffect(openTask.value) {
@@ -190,8 +233,9 @@ private fun TasksApp(openTask: androidx.compose.runtime.MutableState<Launch?>, r
             NavigationBar {
                 tabs.forEachIndexed { i, label ->
                     NavigationBarItem(
-                        selected = tab == i && !setup && !showMissed,
+                        selected = tab == i && !setup && !showMissed && mode == null,
                         onClick = {
+                            mode = null
                             tab = i
                             setup = false
                             showMissed = false
@@ -216,6 +260,8 @@ private fun TasksApp(openTask: androidx.compose.runtime.MutableState<Launch?>, r
                         console -> "Console"
                         setup -> "Setup"
                         showMissed -> MISSED_TITLE
+                        mode == "search" -> "Search"
+                        mode == "done" -> "Completed"
                         else -> tabs[tab]
                     },
                     style = MaterialTheme.typography.headlineSmall,
@@ -233,6 +279,18 @@ private fun TasksApp(openTask: androidx.compose.runtime.MutableState<Launch?>, r
                 // Settings will own the export in a later milestone; until then it lives in the header.
                 TextButton(onClick = { save.launch("tasks-export-${LocalDate.now()}.json") }) { Text("Export") }
             }
+            if (!setup && !console) {
+                Row {
+                    TextButton(onClick = {
+                        mode = if (mode == "search") null else "search"
+                        showMissed = false
+                    }) { Text("Search") }
+                    TextButton(onClick = {
+                        mode = if (mode == "done") null else "done"
+                        showMissed = false
+                    }) { Text("Completed") }
+                }
+            }
             if (needsSetup && !setup) {
                 Text(
                     "Reminders need setup. Tap to finish.",
@@ -241,9 +299,15 @@ private fun TasksApp(openTask: androidx.compose.runtime.MutableState<Launch?>, r
                 )
             }
             if (!setup && !console) {
-                QuickAddBar(handler, projects.map { it.name }, labels.map { it.name })
+                QuickAddBar(
+                    handler,
+                    projects.map { it.name },
+                    labels.map { it.name },
+                    prefill.value,
+                    focusTick,
+                ) { prefill.value = null }
             }
-            if (!setup && !showMissed && !console && tab <= 2) {
+            if (!setup && !showMissed && !console && mode == null) {
                 TagFilter(labels, filter) { id -> filter = if (id in filter) filter - id else filter + id }
             }
             Box(Modifier.fillMaxSize()) {
@@ -253,6 +317,10 @@ private fun TasksApp(openTask: androidx.compose.runtime.MutableState<Launch?>, r
                     setup -> SetupScreen(resumes)
 
                     showMissed -> TaskListScreen(missed, "Nothing missed.", next, open, done)
+
+                    mode == "search" -> SearchScreen(dated + undated, env, next, open, done)
+
+                    mode == "done" -> CompletedScreen(completed)
 
                     tab == 0 -> TodayScreen(shown, shownUndated, today, next, open, done)
 
