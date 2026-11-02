@@ -1806,7 +1806,7 @@ creating a GitHub repo needs the owner's say-so (Q1).
 14. **Assistant's answer context.** After migration, should Assistant's `AnswerPrompt` get a short
     "due today" summary from Tasks (a `status` call) so general questions can mention tasks, or keep
     them fully separate (proposed)?
-15. **Debug/release mixing (answer before M3).** Is "same build type only" acceptable? The
+15. **Debug/release mixing (answered 2026-11-02: same build type only).** Is "same build type only" acceptable? The
     alternative is signing debug builds with the release key on this machine.
 16. **Recurring delete.** Delete removes the whole series (proposed, as Todoist does). Should voice
     also support "skip this one" as its own command, beyond "push to tomorrow"?
