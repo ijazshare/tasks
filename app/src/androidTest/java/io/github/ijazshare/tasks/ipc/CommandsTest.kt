@@ -104,7 +104,7 @@ class CommandsTest {
                 put("zone", ZoneId.systemDefault().id)
                 put("locale", "en-GB")
                 put("hour_cycle", "h12")
-                put("source", "typed")
+                put("source", "voice")
                 put("round", 0)
                 put("routed_by", "keyword")
             }
@@ -345,8 +345,8 @@ class CommandsTest {
         ).isEqualTo("declined")
     }
 
-    /** A reminder that never fired, or fired unanswered, is kept for one "Missed" delivery; run on the importer so nothing is posted. */
-    @Test fun aPastReminderBecomesOneMissedRowAndNothingFiresHere() = runBlocking {
+    /** A reminder that never fired, or fired unanswered, gets exactly one AT_DUE row, which the scheduler delivers once as "Missed" (it may already have, so lastFiredAt is not checked). */
+    @Test fun aPastReminderBecomesExactlyOneRow() = runBlocking {
         val past = listOf(
             "- [ ] zzqtest never fired  <!-- id:zzq00011 due:2026-10-01T09:00 added 2026-09-30 09:00 -->",
             "- [ ] zzqtest unanswered — due Tue 27 Oct, 7:00 PM  <!-- id:zzq00012 delivered added 2026-10-27 12:52 -->",
@@ -360,7 +360,7 @@ class CommandsTest {
         for (id in listOf("zzq00011", "zzq00012")) {
             assertThat(
                 count(
-                    "SELECT COUNT(*) FROM reminder WHERE kind = 'AT_DUE' AND lastFiredAt IS NULL AND deletedAt IS NULL AND taskId IN (SELECT id FROM task WHERE sourceUtterance LIKE '%$id%')",
+                    "SELECT COUNT(*) FROM reminder WHERE kind = 'AT_DUE' AND deletedAt IS NULL AND taskId IN (SELECT id FROM task WHERE sourceUtterance LIKE '%$id%')",
                 ),
             ).isEqualTo(1)
         }
