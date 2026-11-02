@@ -884,6 +884,12 @@ private val reFind = Regex(
     "^(?:is there|are there|do i have|have i got)(?: an?| any| some)? (?:tasks?|reminders?)(?: or (?:tasks?|reminders?))? " +
         "(?:to|about|for|called|named|like) (.+?)\\??$",
 )
+
+// "is there a watering task": the word before "task" is the search word.
+private val reFindWord = Regex("^(?:is there|are there|do i have|have i got) (?:an?|any) (\\p{L}+) tasks?$")
+
+// Bare "done" / "it's done" / "that's done" / Whisper's "market done": complete the referent.
+private val reDoneBare = Regex("^(?:(?:it|that)(?:'s| is) )?done$|^market done$")
 private val reMoveList = Regex("^(?:the |my )?(.+?) (?:list|project)$")
 private val reAddLabel = Regex("^(?:add|put) (?:the )?(?:label|tag) (\\S+) (?:to|on) (.+)$")
 private val reRemind = Regex("^(?:(urgent(?:ly)?)[, ]+)?remind me\\b")
@@ -946,7 +952,8 @@ fun scan(text: String, ctx: ParseContext): Draft {
                 ).trim(),
             )
         }
-        reFind.find(body)?.let { m ->
+        reDoneBare.find(body)?.let { return d.copy(intent = Intent.COMPLETE, target = Target.Referent) }
+        (reFind.find(body) ?: reFindWord.find(body))?.let { m ->
             val g = m.groups[1]!!
             return d.copy(
                 intent = Intent.QUERY,
