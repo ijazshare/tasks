@@ -73,12 +73,14 @@ private class DryStore(private val real: TaskStore, val log: MutableList<String>
     override suspend fun addProject(name: String): Boolean = true.also { log += "addProject $name" }
 
     override suspend fun addLabel(name: String): Boolean = true.also { log += "addLabel $name" }
+
+    override suspend fun view(id: String) = real.view(id)
 }
 
 /**
  * Debug-only contract console (spec 14, M2): type an utterance and see the ParseResult and the handler's
- * answer. "Dry run" (the default) reads your real tasks but writes nothing. Until the IPC arrives (M3) this is
- * the only way to exercise the voice grammar in the app.
+ * answer. "Dry run" (the default) reads your real tasks but writes nothing. It bypasses the IPC layer (no undo, no
+ * persisted conversations); the real path is `ipc/Commands`.
  */
 @Composable
 fun ConsoleScreen(store: TaskStore) {

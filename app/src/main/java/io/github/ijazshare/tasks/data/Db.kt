@@ -7,6 +7,8 @@
  * Software Foundation, either version 3 of the License, or (at your option) any
  * later version. See the LICENSE file in the project root for the full text.
  */
+@file:UseContextualSerialization(Instant::class, LocalDate::class, LocalTime::class)
+
 package io.github.ijazshare.tasks.data
 
 import android.content.Context
@@ -21,11 +23,14 @@ import androidx.room.TypeConverter
 import androidx.room.TypeConverters
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.UseContextualSerialization
 import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalTime
 
-// Schema v2, spec section 5. v2 adds `label.scheduleJson` and `task.missedAt` (MIGRATION_1_2).
+// Schema v3, spec section 5. v2 added `label.scheduleJson` and `task.missedAt` (MIGRATION_1_2); v3 adds
+// `referent.listedJson`, the ids a query listed, so "which task?" survives a process death (MIGRATION_2_3).
 // Ids are random strings, timestamps are epoch ms, dates and times are ISO strings. Columns carry
 // the property name (camelCase); `order` is reserved in SQL, so the property is `sortOrder`.
 // Everything soft-deletes through `deletedAt`.
@@ -73,6 +78,7 @@ data class Label(
     val scheduleJson: String?,
 )
 
+@Serializable
 @Entity(tableName = "task", indices = [Index("projectId", "completedAt", "deletedAt"), Index("dueDate")])
 data class Task(
     @PrimaryKey val id: String,
@@ -116,6 +122,7 @@ data class TaskFts(val taskId: String, val title: String)
 @Entity(tableName = "task_label", primaryKeys = ["taskId", "labelId"])
 data class TaskLabel(val taskId: String, val labelId: String)
 
+@Serializable
 @Entity(tableName = "reminder", indices = [Index("nextFireAt")])
 data class Reminder(
     @PrimaryKey val id: String,
@@ -174,7 +181,14 @@ data class Conversation(
 )
 
 @Entity(tableName = "referent")
-data class Referent(@PrimaryKey val client: String, val taskId: String, val expiresAt: Instant)
+data class Referent(
+    @PrimaryKey val client: String,
+    /** Empty when the last thing was a list of several tasks (then [listedJson] has the ids). */
+    val taskId: String,
+    val expiresAt: Instant,
+    /** JSON array of the task ids the last query listed. Added in v3. */
+    val listedJson: String?,
+)
 
 @Entity(tableName = "request_log")
 data class RequestLog(@PrimaryKey val requestId: String, val receivedAt: Instant, val responseJson: String)
@@ -256,6 +270,12 @@ val MIGRATION_1_2 = object : Migration(1, 2) {
     }
 }
 
+val MIGRATION_2_3 = object : Migration(2, 3) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE referent ADD COLUMN listedJson TEXT")
+    }
+}
+
 @Database(
     entities = [
         Project::class, Section::class, Label::class, Task::class, TaskFts::class, TaskLabel::class,
@@ -263,7 +283,7 @@ val MIGRATION_1_2 = object : Migration(1, 2) {
         RequestLog::class, ImportMap::class, ImportRun::class, Ramble::class, RambleDraft::class,
         UtteranceLog::class,
     ],
-    version = 2,
+    version = 3,
 )
 @TypeConverters(Converters::class)
 abstract class TasksDb : RoomDatabase() {
@@ -274,7 +294,7 @@ abstract class TasksDb : RoomDatabase() {
 
         fun get(context: Context): TasksDb = instance ?: synchronized(this) {
             instance ?: Room.databaseBuilder(context.applicationContext, TasksDb::class.java, "tasks.db")
-                .addMigrations(MIGRATION_1_2)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
                 .build()
                 .also { instance = it }
         }

@@ -25,7 +25,7 @@ import java.time.ZonedDateTime
 
 // Spec section 4 without the transport: the command handler, task matching (6.1 step 5), follow-up
 // conversations (4.7) and the speech rules (4.5.4). Conversations and referents live in memory here;
-// their Room tables and the undo journal arrive with M3.
+// the IPC layer (ipc/Commands.kt) persists them in Room by replaying the answers.
 
 data class Snapshot(val projects: List<ProjectInfo>, val labels: List<String>, val openTasks: List<OpenTask>)
 
@@ -62,7 +62,22 @@ interface TaskStore {
     suspend fun addProject(name: String): Boolean
 
     suspend fun addLabel(name: String): Boolean
+
+    /** The task as the wire layer reports it (4.5.1), or null if it does not exist. */
+    suspend fun view(id: String): TaskView?
 }
+
+/** A task as an effect reports it. [reminderAt] is the next fire time, if any. */
+data class TaskView(
+    val id: String,
+    val title: String,
+    val project: String,
+    val due: DueSpec?,
+    val recurrence: RecurrenceRule?,
+    val anchor: String?,
+    val recurrenceText: String?,
+    val reminderAt: Instant?,
+)
 
 data class Request(
     val type: String = "utterance",
@@ -92,6 +107,10 @@ data class Response(
     val taskId: String? = null,
     val effect: String? = null,
     val parse: ParseResult? = null,
+    /** For a query: everything that matched (the wire layer caps it). */
+    val items: List<OpenTask>? = null,
+    /** For a created project or label: its name. */
+    val name: String? = null,
 )
 
 private class Conv(
@@ -114,8 +133,8 @@ private val NO = setOf("no", "nope", "nah")
 
 class CommandHandler(private val store: TaskStore, private val settings: ParseSettings = ParseSettings()) {
     private val convs = mutableMapOf<String, Conv>()
-    private val referents = mutableMapOf<String, Pair<String, Instant>>()
-    private val listed = mutableMapOf<String, List<OpenTask>>()
+    internal val referents = mutableMapOf<String, Pair<String, Instant>>()
+    internal val listed = mutableMapOf<String, List<OpenTask>>()
     private var counter = 0
 
     suspend fun handle(req: Request): Response {
@@ -274,6 +293,7 @@ class CommandHandler(private val store: TaskStore, private val settings: ParseSe
                         r.intent,
                         effect = "project_created",
                         parse = r,
+                        name = name,
                     )
                 } else {
                     Response("declined", "You already have ${article(name)} $name list.", r.intent, parse = r)
@@ -289,6 +309,7 @@ class CommandHandler(private val store: TaskStore, private val settings: ParseSe
                         r.intent,
                         effect = "label_created",
                         parse = r,
+                        name = name.lowercase(),
                     )
                 } else {
                     Response("declined", "You already have ${article(name)} $name label.", r.intent, parse = r)
@@ -492,7 +513,7 @@ class CommandHandler(private val store: TaskStore, private val settings: ParseSe
             referents.remove(req.client)
             listed[req.client] = items
         }
-        return Response("done", speech, Intent.QUERY, effect = "listed", parse = r)
+        return Response("done", speech, Intent.QUERY, effect = "listed", parse = r, items = items)
     }
 
     // ---- speech ---------------------------------------------------------------------------------------

@@ -142,6 +142,91 @@ interface TasksDao {
     @Query("UPDATE reminder SET unseen = 0 WHERE taskId = :taskId")
     suspend fun markSeen(taskId: String)
 
+    // ---- M3: undo journal, conversations, referents, dedupe, import ----------------------------------
+
+    @Query("SELECT * FROM task WHERE id = :id")
+    suspend fun taskAny(id: String): Task?
+
+    @Query("DELETE FROM reminder WHERE taskId = :taskId")
+    suspend fun clearReminders(taskId: String)
+
+    @Query("DELETE FROM completion_log WHERE taskId = :taskId AND completedAt >= :since")
+    suspend fun deleteLogsSince(taskId: String, since: Instant)
+
+    @Query(
+        "DELETE FROM project WHERE id = :id AND NOT EXISTS (SELECT 1 FROM task WHERE projectId = :id AND deletedAt IS NULL)",
+    )
+    suspend fun dropProject(id: String)
+
+    @Query("DELETE FROM task_label WHERE labelId = :id")
+    suspend fun dropTagsOf(id: String)
+
+    @Query("DELETE FROM label WHERE id = :id")
+    suspend fun dropLabel(id: String)
+
+    @Insert
+    suspend fun insert(entry: UndoJournal)
+
+    @Query("SELECT * FROM undo_journal WHERE token = :token")
+    suspend fun journal(token: String): UndoJournal?
+
+    @Query("UPDATE undo_journal SET used = 1 WHERE token = :token")
+    suspend fun markUsed(token: String)
+
+    @Query("DELETE FROM undo_journal WHERE expiresAt < :now")
+    suspend fun purgeJournal(now: Instant)
+
+    @Upsert
+    suspend fun upsert(conversation: Conversation)
+
+    @Query("SELECT * FROM conversation WHERE client = :client")
+    suspend fun conversationOf(client: String): Conversation?
+
+    @Query("DELETE FROM conversation WHERE client = :client")
+    suspend fun dropConversation(client: String)
+
+    @Query("DELETE FROM conversation WHERE expiresAt < :now")
+    suspend fun purgeConversations(now: Instant)
+
+    @Upsert
+    suspend fun upsert(referent: Referent)
+
+    @Query("SELECT * FROM referent WHERE client = :client")
+    suspend fun referentOf(client: String): Referent?
+
+    @Query("DELETE FROM referent WHERE client = :client")
+    suspend fun dropReferent(client: String)
+
+    @Query("SELECT * FROM request_log WHERE requestId = :id")
+    suspend fun requestLog(id: String): RequestLog?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insert(entry: RequestLog)
+
+    @Query("DELETE FROM request_log WHERE receivedAt < :before")
+    suspend fun purgeRequests(before: Instant)
+
+    @Query("SELECT localId FROM import_map WHERE source = :source AND externalId = :externalId")
+    suspend fun imported(source: String, externalId: String): String?
+
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insert(entry: ImportMap): Long
+
+    @Query("SELECT * FROM import_run WHERE id = :id")
+    suspend fun importRun(id: String): ImportRun?
+
+    @Upsert
+    suspend fun upsert(run: ImportRun)
+
+    @Query("SELECT COUNT(*) FROM import_run WHERE source = :source AND finishedAt IS NOT NULL AND removedAt IS NULL")
+    suspend fun finishedRuns(source: String): Int
+
+    @Insert
+    suspend fun insertAll(logs: List<CompletionLog>)
+
+    @Query("SELECT * FROM project WHERE id = :id")
+    suspend fun projectById(id: String): Project?
+
     /** Opening a task clears it from the Missed list. */
     @Query("UPDATE task SET missedAt = NULL WHERE id = :taskId")
     suspend fun clearMissed(taskId: String)

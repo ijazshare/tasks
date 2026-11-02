@@ -73,6 +73,7 @@ class FakeStore(
 
     override suspend fun reschedule(id: String, due: DueSpec) {
         moved = due
+        open = open.map { if (it.id == id) it.copy(due = due) else it }
     }
 
     override suspend fun change(id: String, priority: Int?, project: String?, label: LabelRef?) {
@@ -84,6 +85,22 @@ class FakeStore(
 
     override suspend fun addLabel(name: String) =
         (labels + addedLabels).none { it.equals(name, true) } && addedLabels.add(name)
+
+    override suspend fun view(id: String): TaskView? = open.firstOrNull { it.id == id }?.let {
+        val made = created?.takeIf { c -> c.title == it.title }
+        TaskView(
+            it.id,
+            it.title,
+            it.project,
+            it.due,
+            made?.recurrence,
+            made?.recurrence?.let {
+                "schedule"
+            },
+            made?.recurrenceText,
+            it.due?.takeIf { d -> d.time != null }?.instant(java.time.ZoneId.of("Europe/London")),
+        )
+    }
 }
 
 private fun JsonElement?.str() = (this as? JsonPrimitive)?.takeIf { it !is JsonNull }?.content

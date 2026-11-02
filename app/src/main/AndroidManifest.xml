@@ -9,6 +9,12 @@
     <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
 
+    <!-- Declared identically by Assistant, so whichever app installs first defines it (spec 4.2.1). -->
+    <permission
+        android:name="io.github.ijazshare.permission.TASK_COMMAND"
+        android:label="Send task commands"
+        android:protectionLevel="signature" />
+
     <application
         android:name=".TasksApplication"
         android:allowBackup="false"
@@ -27,6 +33,11 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <service
+            android:name=".ipc.CommandService"
+            android:exported="true"
+            android:permission="io.github.ijazshare.permission.TASK_COMMAND" />
 
         <receiver
             android:name=".reminders.ReminderReceiver"
