@@ -155,10 +155,14 @@ private fun LazyListScope.rows(
     done: (Task) -> Unit,
 ) = items(tasks, key = { it.id }) { TaskRow(it, withDate, alerts[it.id], { open(it) }, { done(it) }) }
 
-/** Overdue (collapsible), then today: timed tasks, then all-day ones. [tasks] is every open dated task. */
+/**
+ * Overdue (collapsible), then today: timed tasks, then all-day ones, then tasks with no date.
+ * [tasks] is every open dated task.
+ */
 @Composable
 fun TodayScreen(
     tasks: List<Task>,
+    undated: List<Task>,
     today: LocalDate,
     alerts: Map<String, Instant>,
     open: (Task) -> Unit,
@@ -167,7 +171,7 @@ fun TodayScreen(
     var showOverdue by rememberSaveable { mutableStateOf(true) }
     val overdue = tasks.filter { it.dueDate!! < today }
     val now = tasks.filter { it.dueDate == today }
-    if (overdue.isEmpty() && now.isEmpty()) return Empty("Nothing due today.")
+    if (overdue.isEmpty() && now.isEmpty() && undated.isEmpty()) return Empty("Nothing due today.")
     LazyColumn(Modifier.fillMaxSize()) {
         if (overdue.isNotEmpty()) {
             item { Header("Overdue (${overdue.size}) ${if (showOverdue) "▾" else "▸"}") { showOverdue = !showOverdue } }
@@ -182,6 +186,10 @@ fun TodayScreen(
         if (allDay.isNotEmpty()) {
             item { Header("All day") }
             rows(allDay, false, alerts, open, done)
+        }
+        if (undated.isNotEmpty()) {
+            item { Header("No date") }
+            rows(undated, false, alerts, open, done)
         }
     }
 }

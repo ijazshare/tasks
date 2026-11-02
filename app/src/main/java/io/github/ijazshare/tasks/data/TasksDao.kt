@@ -48,6 +48,13 @@ interface TasksDao {
     )
     fun dated(): Flow<List<Task>>
 
+    /** Open tasks with no due date (the "No date" section of Upcoming). */
+    @Query(
+        "SELECT * FROM task WHERE completedAt IS NULL AND deletedAt IS NULL AND dueDate IS NULL " +
+            "ORDER BY sortOrder, createdAt",
+    )
+    fun undated(): Flow<List<Task>>
+
     @Query(
         "SELECT * FROM task WHERE completedAt IS NULL AND deletedAt IS NULL AND missedAt IS NOT NULL " +
             "ORDER BY missedAt DESC",

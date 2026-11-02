@@ -54,7 +54,6 @@ import io.github.ijazshare.tasks.data.TasksDb
 import io.github.ijazshare.tasks.reminders.Notifications.EXTRA_MISSED
 import io.github.ijazshare.tasks.reminders.Notifications.EXTRA_TASK
 import io.github.ijazshare.tasks.ui.NEW_TASK
-import io.github.ijazshare.tasks.ui.ProjectsScreen
 import io.github.ijazshare.tasks.ui.SetupScreen
 import io.github.ijazshare.tasks.ui.SetupState
 import io.github.ijazshare.tasks.ui.TagFilter
@@ -66,7 +65,6 @@ import io.github.ijazshare.tasks.ui.nextAlerts
 import io.github.ijazshare.tasks.ui.theme.TasksTheme
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.time.LocalDate
@@ -99,7 +97,7 @@ class MainActivity : ComponentActivity() {
 /** A tapped notification: its task, and whether it was a Missed one (which opens the Missed list instead). */
 private data class Launch(val taskId: String, val missed: Boolean)
 
-private val tabs = listOf("Today", "Tomorrow", "Upcoming", "Inbox", "Projects")
+private val tabs = listOf("Today", "Tomorrow", "Upcoming")
 private const val MISSED_TITLE = "Missed"
 private const val CLOCK_POLL_MS = 60_000L
 
@@ -109,7 +107,6 @@ private fun TasksApp(openTask: androidx.compose.runtime.MutableState<Launch?>, r
     val scope = rememberCoroutineScope()
     val repo = remember { Repository(context) }
     var tab by rememberSaveable { mutableIntStateOf(0) }
-    var projectId by rememberSaveable { mutableStateOf<String?>(null) }
     var sheet by rememberSaveable { mutableStateOf<String?>(null) }
     var setup by rememberSaveable { mutableStateOf(false) }
     val today by produceState(LocalDate.now(), resumes) {
@@ -135,8 +132,15 @@ private fun TasksApp(openTask: androidx.compose.runtime.MutableState<Launch?>, r
             dated.filter { it.id in tagged }
         }
     }
-    val inbox by remember { repo.inProject(INBOX_ID) }.collectAsState(emptyList())
-    val inProject by remember(projectId) { projectId?.let(repo::inProject) ?: emptyFlow() }.collectAsState(emptyList())
+    val undated by remember { repo.undated() }.collectAsState(emptyList())
+    val shownUndated = remember(undated, tagLinks, filter) {
+        if (filter.isEmpty()) {
+            undated
+        } else {
+            val tagged = tagLinks.filter { it.labelId in filter }.map { it.taskId }.toSet()
+            undated.filter { it.id in tagged }
+        }
+    }
     val needsSetup = remember(resumes) { !SetupState.read(context).complete }
 
     // Tapped notification: a Missed one opens the Missed list, any other opens its task.
@@ -171,7 +175,6 @@ private fun TasksApp(openTask: androidx.compose.runtime.MutableState<Launch?>, r
         scope.launch { repo.opened(it.id) }
     }
     val done: (io.github.ijazshare.tasks.data.Task) -> Unit = { scope.launch { repo.complete(it.id) } }
-    val project = projects.firstOrNull { it.id == projectId }
 
     Scaffold(
         bottomBar = {
@@ -183,7 +186,6 @@ private fun TasksApp(openTask: androidx.compose.runtime.MutableState<Launch?>, r
                             tab = i
                             setup = false
                             showMissed = false
-                            projectId = null
                         },
                         icon = {},
                         label = { Text(label) },
@@ -204,7 +206,7 @@ private fun TasksApp(openTask: androidx.compose.runtime.MutableState<Launch?>, r
                     when {
                         setup -> "Setup"
                         showMissed -> MISSED_TITLE
-                        else -> project?.name ?: tabs[tab]
+                        else -> tabs[tab]
                     },
                     style = MaterialTheme.typography.headlineSmall,
                     modifier = Modifier.weight(1f),
@@ -232,7 +234,7 @@ private fun TasksApp(openTask: androidx.compose.runtime.MutableState<Launch?>, r
 
                     showMissed -> TaskListScreen(missed, "Nothing missed.", next, open, done)
 
-                    tab == 0 -> TodayScreen(shown, today, next, open, done)
+                    tab == 0 -> TodayScreen(shown, shownUndated, today, next, open, done)
 
                     tab == 1 -> TaskListScreen(
                         shown.filter { it.dueDate == today.plusDays(1) },
@@ -243,22 +245,12 @@ private fun TasksApp(openTask: androidx.compose.runtime.MutableState<Launch?>, r
                         withDate = false,
                     )
 
-                    tab == 2 -> UpcomingScreen(shown, today, next, open, done)
-
-                    tab == 3 -> TaskListScreen(inbox, "Your inbox is empty.", next, open, done)
-
-                    project != null -> TaskListScreen(inProject, "No tasks in this project.", next, open, done)
-
-                    else -> ProjectsScreen(
-                        projects,
-                        onProject = { projectId = it.id },
-                        onNew = { name -> scope.launch { repo.addProject(name) } },
-                    )
+                    else -> UpcomingScreen(shown, today, next, open, done)
                 }
             }
         }
     }
     sheet?.let {
-        TaskSheet(it, projectId ?: INBOX_ID, projects, repo, onClose = { sheet = null })
+        TaskSheet(it, INBOX_ID, projects, repo, onClose = { sheet = null })
     }
 }

@@ -53,6 +53,8 @@ class Repository(private val context: Context) {
 
     fun dated(): Flow<List<Task>> = dao.dated()
 
+    fun undated(): Flow<List<Task>> = dao.undated()
+
     fun missed(): Flow<List<Task>> = dao.missed()
 
     fun labels(): Flow<List<Label>> = dao.labels()
