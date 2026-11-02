@@ -50,17 +50,20 @@ object Scheduling {
         val lastFiredAt: Instant?,
         val snoozedUntil: Instant?,
         val unseen: Boolean,
+        val taskId: String = id,
     ) {
         /** Never fired for this due, or snoozed since. Fired once means done until the due changes. */
         val pending get() = lastFiredAt == null || snoozedUntil != null
 
         fun afterDelivery(kind: Kind) = when (kind) {
             Kind.AGAIN -> copy(unseen = false)
+            Kind.SKIPPED -> copy(lastFiredAt = fireAt, snoozedUntil = null)
             else -> copy(lastFiredAt = fireAt, snoozedUntil = null, unseen = true)
         }
     }
 
-    enum class Kind { ON_TIME, MISSED, AGAIN }
+    /** SKIPPED: due too, but an alert later than it for the same task is shown instead (8.6 rule 8). */
+    enum class Kind { ON_TIME, MISSED, AGAIN, SKIPPED }
 
     data class Delivery(val id: String, val kind: Kind)
 
@@ -70,22 +73,29 @@ object Scheduling {
 
     /**
      * What to show now and when to wake next. A pending reminder whose time has come is delivered
-     * once (and as Missed if it is late); [afterBoot] also shows once more any delivered reminder
-     * nobody has seen, because a reboot cleared its notification.
+     * once (and as Missed if it is late); of several for one task only the latest is shown.
+     * [afterBoot] also shows once more any delivered reminder nobody has seen, because a reboot
+     * cleared its notification.
      */
     fun plan(reminders: List<Armed>, now: Instant, afterBoot: Boolean = false): Plan {
         val horizon = now.plus(TOLERANCE)
-        val deliver = reminders.mapNotNull { r ->
+        val due = reminders.filter { it.pending && it.fireAt <= horizon }
+        val latest = due.groupBy { it.taskId }.mapValues { (_, rs) -> rs.maxBy { it.fireAt }.id }
+        val deliver = due.map { r ->
             when {
-                r.pending && r.fireAt <= horizon ->
-                    Delivery(r.id, if (Duration.between(r.fireAt, now) > MISSED_AFTER) Kind.MISSED else Kind.ON_TIME)
-
-                afterBoot && !r.pending && r.unseen -> Delivery(r.id, Kind.AGAIN)
-
-                else -> null
+                r.id != latest[r.taskId] -> Delivery(r.id, Kind.SKIPPED)
+                Duration.between(r.fireAt, now) > MISSED_AFTER -> Delivery(r.id, Kind.MISSED)
+                else -> Delivery(r.id, Kind.ON_TIME)
             }
         }
-        return Plan(deliver, reminders.filter { it.pending && it.fireAt > horizon }.minOfOrNull { it.fireAt })
+        val again = if (afterBoot) reminders.filter { !it.pending && it.unseen } else emptyList()
+        return Plan(
+            deliver + again.map { Delivery(it.id, Kind.AGAIN) },
+            reminders.filter {
+                it.pending &&
+                    it.fireAt > horizon
+            }.minOfOrNull { it.fireAt },
+        )
     }
 
     /** "Tomorrow" is the next calendar date, never +24h (8.1). */

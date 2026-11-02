@@ -766,7 +766,8 @@ retention rules in section 12. `order` is a reserved SQL word, so the column is 
 @Entity section(id, project_id, name, name_key, sort_order, is_archived,
                 created_at, updated_at, deleted_at?)       // same uniqueness rule per project
 
-@Entity label(id, name, name_key, color?, sort_order, created_at, updated_at, deleted_at?)
+@Entity label(id, name, name_key, color?, sort_order, created_at, updated_at, deleted_at?,
+              schedule_json: String? /* 8.6; null = Regular. Added in schema v2 */)
   // name_key unique among non-deleted labels, enforced by Repository
 
 @Entity task(
@@ -780,6 +781,7 @@ retention rules in section 12. `order` is a reserved SQL word, so the column is 
   recurrence_text: String? /* as the user said it, for display */,
   deadline: LocalDate? /* not allowed on recurring tasks */, duration_min: Int?,
   completed_at: Instant?, created_at, updated_at, deleted_at?,
+  missed_at: Instant? /* an alert was missed, task not opened since (8.6 rule 8). Schema v2 */,
   source: String /* voice|typed|ramble|share|notification|email|assistant_md|todoist */,
   source_utterance: String? /* exact words that created it; cleared by "Clear voice history" */)
 
@@ -787,7 +789,8 @@ retention rules in section 12. `order` is a reserved SQL word, so the column is 
 
 @Entity reminder(
   id, task_id,
-  kind: String /* AT_DUE | BEFORE_DUE | AT_LOCAL | AT_INSTANT */,
+  kind: String /* AT_DUE | BEFORE_DUE | AT_LOCAL | AT_INSTANT | NAG (8.6 uses AT_DUE, BEFORE_DUE, NAG;
+                  at_instant holds each alert's fire time) */,
   offset_min: Int? /* BEFORE_DUE */,
   at_date: LocalDate?, at_time: LocalTime?, at_zone: String? /* AT_LOCAL */,
   at_instant: Instant? /* AT_INSTANT, "in 20 minutes" */,
@@ -1353,6 +1356,40 @@ Reminder rules that go with it:
 
 ---
 
+### 8.6 Tag reminder schedules (owner, 2026-11-02; replaces D3)
+
+Reminders come from tags, not from "remind me". Every dated task gets the schedule of its most
+urgent tag; untagged tasks get **Regular**.
+
+| Schedule | Tags | Fires before due | At due | After due | Snooze buttons |
+|---|---|---|---|---|---|
+| Regular | none, `work`, `personal`, `family`, `client` | 3 d, 1 d, 1 h, 10 min | no | no | 15 min, Next day |
+| Urgent | `urgent` | 3 d, 1 d, 1 h, 10 min | yes | every 10 min until Done, day and night | 15 min, 1 h |
+
+Rules:
+
+1. **Short notice:** alerts already past at creation are skipped silently. If none are left, the
+   task fires once at due.
+2. **Date only:** alerts at 09:00 three days and one day before, and 09:00 on the day.
+3. **Repeating tasks:** only the 1 h and 10 min alerts (plus urgent's at-due and nag).
+4. **Urgent nags all night.** No quiet hours.
+5. **Snooze only at the last moment (owner, 2026-11-02).** The 3 d, 1 d and 1 h alerts show only
+   Done. The snooze buttons appear only on the 10 min alert and the at-due alert (urgent), plus
+   urgent's nags that follow it and the 09:00 alert of a date-only task (its "task time"). A snooze that lands on or after the next scheduled alert
+   is replaced by that alert, so two alerts never stack (e.g. urgent: Snooze 1 h on the 1 h alert
+   becomes the at-due alert).
+6. **Voice and typed tags:** "for <tag>" counts only directly after "remind me" ("remind me for work
+   to send the invoice Friday at 3"); "urgent" counts before "remind me" or as "remind me urgently".
+   Anywhere else the words stay in the title ("buy a gift for family").
+7. **Lists:** tasks are listed by due date in Today / Tomorrow / Upcoming, each with tag filter
+   chips; each row shows its next alert.
+8. **Missed:** alerts missed while the phone was off collapse to one "Missed" notification per task
+   (the latest). Tapping it opens a **Missed** list of tasks whose alerts were missed and not yet
+   opened.
+
+Schedules are stored on the label (`label.schedule_json`: offsets, at_due, nag_min, snooze options);
+reminder rows are derived from them whenever a task's due, tags or recurrence change.
+
 ## 9. UI essentials
 
 The visual language follows Assistant's Halo theme: Cortana cyan accent, chamfered panels, subtle
@@ -1739,7 +1776,7 @@ creating a GitHub repo needs the owner's say-so (Q1).
    - D1: a bare one-off hour takes the nearer future am/pm, and asks only between midnight and
      7 am;
    - D2: morning 09:00, afternoon 14:00, evening 19:00, tonight 20:00 (Todoist uses afternoon 12 pm);
-   - D3: timed tasks get an at-due reminder even without "remind me".
+   - D3: replaced by tag schedules (8.6, owner 2026-11-02).
 5. **The 31st in short months.** Clamp to the last day (proposed), or skip that month?
 6. **Ramble saving.** Always review before saving (proposed), or auto-save drafts that parsed with no
    flags?

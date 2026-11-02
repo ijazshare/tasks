@@ -325,4 +325,38 @@ class SchedulingTest {
         const val MINUTES = 60
         const val FORTY = 40L
     }
+
+    @Test
+    fun missedAlertsOfOneTaskCollapseToTheLatestOne() {
+        val now = Instant.parse("2026-11-02T12:00:00Z")
+        fun r(id: String, task: String, at: String) =
+            Armed(id, Instant.parse(at), null, null, false, task)
+        val plan = Scheduling.plan(
+            listOf(
+                r("a1", "A", "2026-11-02T09:00:00Z"),
+                r("a2", "A", "2026-11-02T11:00:00Z"),
+                r("a3", "A", "2026-11-02T10:00:00Z"),
+                r("b1", "B", "2026-11-02T08:00:00Z"),
+                r("a4", "A", "2026-11-02T13:00:00Z"),
+            ),
+            now,
+        )
+        assertThat(plan.deliver).containsExactly(
+            Scheduling.Delivery("a1", Kind.SKIPPED),
+            Scheduling.Delivery("a2", Kind.MISSED),
+            Scheduling.Delivery("a3", Kind.SKIPPED),
+            Scheduling.Delivery("b1", Kind.MISSED),
+        )
+        assertThat(plan.nextAlarm).isEqualTo(Instant.parse("2026-11-02T13:00:00Z"))
+        val after = Armed(
+            "a1",
+            Instant.parse("2026-11-02T09:00:00Z"),
+            null,
+            null,
+            false,
+            "A",
+        ).afterDelivery(Kind.SKIPPED)
+        assertThat(after.pending).isFalse()
+        assertThat(after.unseen).isFalse()
+    }
 }
