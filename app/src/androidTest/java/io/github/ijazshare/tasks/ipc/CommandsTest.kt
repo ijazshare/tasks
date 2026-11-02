@@ -63,6 +63,15 @@ class CommandsTest {
     @After fun tearDown() = runBlocking {
         wipe()
         io.github.ijazshare.tasks.reminders.ReminderScheduler(ctx).rearm()
+        // The app may post a "Missed" notification for a test row a moment after it is deleted: take down
+        // every notification carrying the test marker, and nothing else (the owner's are never touched).
+        val manager = ctx.getSystemService(android.app.NotificationManager::class.java)
+        repeat(2) {
+            manager.activeNotifications
+                .filter { it.notification.extras.getCharSequence("android.title")?.contains("zzqtest", true) == true }
+                .forEach { manager.cancel(it.id) }
+            Thread.sleep(SETTLE_MS)
+        }
     }
 
     private fun wipe() {
@@ -384,6 +393,7 @@ class CommandsTest {
     }
 
     private companion object {
+        const val SETTLE_MS = 600L
         const val CLIENT = "test.client"
     }
 }
