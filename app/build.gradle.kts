@@ -113,6 +113,7 @@ dependencies {
 
     testImplementation(libs.junit)
     testImplementation(libs.truth)
+    testImplementation(libs.kotest.property)
 
     androidTestImplementation(libs.androidx.room.testing)
     androidTestImplementation(libs.truth)

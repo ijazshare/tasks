@@ -866,7 +866,8 @@ openTasksIndex, settings)`.
    - leading fillers (`okay`, `ok`, `hey`, `so`, `right`, `please`, `um`, `uh`) are skipped, as in
      4.12 step 3;
    - number words become digits ("twenty five" → 25, "a quarter past" kept as a phrase token,
-     "half" kept);
+     "half" kept). Implemented as: the working copy is the same length as the utterance and the slot
+     grammars read number words themselves, so the offset map is the identity;
    - unicode dashes and quotes are normalized;
    - **protected spans** are marked and are never parsed as dates or times: phone numbers
      (`\d{3}-\d{4}`, `555-0142`, `+44 …`), money (`£40`, `$12.50`), version-like tokens, quoted text,
@@ -898,7 +899,7 @@ openTasksIndex, settings)`.
    4. times (`at 5`, `5pm`, `17:00`, `half past six`, `quarter to 9`, `noon`, `midnight`, `in the
       morning/afternoon/evening`);
    5. deadline (`deadline Friday`, typed `{Friday}`);
-   6. priority (`priority one…four`, `p1…p4`, `urgent` = p1, `high priority` = p2);
+   6. priority (`priority one…four`, `p1…p4`, `high priority` = p2; `urgent` is a tag, 8.6 rule 6);
    7. project, section and label (spoken `in my X list`, `to the X project`, `label Y`, `tagged Y`;
       typed `#X`, `/S`, `%Y` and `@Y`).
 
@@ -981,7 +982,7 @@ terminals that lower to the same AST. They follow Todoist's current Quick Add sy
 | `@errands` | label | Also accepted. Todoist plans to retire `@` by the end of 2026; Tasks keeps it because it has no other meaning here |
 | `p1`-`p4` | priority | Todoist's help lists `p1`-`p3` (p4 = no priority); its API docs accept `p1`-`p4` |
 | `{Friday}` | deadline | |
-| `!30mb`, `!2h`, `!14:00` | extra reminder (before due, in N, at time) | should |
+| `!14:00`, `!30 min before` | extra reminder (at a time, or before due) | should. Todoist's help shows exactly these two forms (checked 2026-11-02); this spec's shorthand `!30mb` and `!2h` is dropped. M2 parses the symbol away but stores nothing, because alerts come from tags (8.6) |
 | `for 2h` | duration | later (parsed and stored) |
 | ` // text` at the end | description | From Todoist's Quick Add **API** docs (`research/api-and-android.md` §3); the help page does not mention it |
 | `every!` | completion-anchored recurrence | should |
@@ -1167,8 +1168,8 @@ research note and must be checked before being treated as parity claims.
   and when the user sets "keep this time when travelling" in the detail sheet. Spoken zones ("at 3
   London time") are declined in v1 (6.1 step 4).
 - "In N minutes/hours" = `speech_end + Duration`, **not rounded**. The alarm fires at that exact
-  instant. The task's `due_time` is that instant in the creating zone, truncated to the minute, and
-  is what the display shows. The task counts as overdue from the reminder instant, not from the
+  instant. The task's `due_time` is that instant in the creating zone, kept to the millisecond so the
+  alert fires on the instant; the display truncates it to the minute. The task counts as overdue from the reminder instant, not from the
   truncated minute.
 - "In N days/weeks" is calendar arithmetic (`LocalDate.plusDays`). The task gets the spoken time if
   one is said; otherwise it is all-day.
@@ -1238,7 +1239,7 @@ way in February.
 | "midnight" / "midnight tonight" | 00:00 at the **start of the next day**. Speech: "at midnight tonight, the start of Wednesday" |
 | "tonight", "this morning/afternoon/evening", "tomorrow morning" with no time | Named-time defaults (D2). Speech states the clock time. If the named time has already passed today ("this morning" at 14:03), ask |
 | An explicit time today that has already passed ("remind me at 1pm" at 14:03, "at 9am" at 14:03) in a one-off | Ask "1 pm today has passed. Tomorrow at 1 pm?" (`confirm`). Yes → tomorrow; no → declined |
-| "remind me" with a date but no time ("remind me on Friday to …") | Ask "What time on Friday the 30th?" with options "9 am" (the morning named time) and "No alert". "No alert" saves it all-day with no reminder and says "no alert". Without "remind me" ("add X on Friday"), it is saved all-day, no reminder, no question |
+| "remind me" with a date but no time ("remind me on Friday to …") | Ask "What time on Friday the 30th?" with options "9 am" (the morning named time) and "No alert". "No alert" saves it all-day with no clock time. Under 8.6 the tag schedule still gives an all-day task its 09:00 alerts, so speech says "no time alert", not "no alert". Without "remind me" ("add X on Friday"), it is saved all-day, no question |
 | "remind me to X" with no date and no time | Ask "When should I remind you?" (Q10) |
 | A date that doesn't exist ("31st of November") | Decline: "November has no 31st." |
 | A time that doesn't exist ("at 25 o'clock") | Decline: "That isn't a time I can use." |
@@ -1257,7 +1258,7 @@ always read back as a clock time, and each is a single policy constant so the ow
 
 | Id | Default | Read back as | Alternative if the owner rejects it |
 |---|---|---|---|
-| D1 | Bare one-off hour → the nearer future of am/pm, outside the night window | "today at 5 pm" | Ask am/pm every time |
+| D1 | Bare one-off hour → the nearer future of am/pm, outside the night window. "Nearer" is read off the clock now (the next time that wall time occurs), then applied to the spoken date, so "tomorrow at 5" said at 14:03 is 5 pm | "today at 5 pm" | Ask am/pm every time |
 | D2 | Named times: morning 09:00, afternoon 14:00, evening 19:00, tonight 20:00 (Settings). For comparison, Todoist uses morning 9 am, afternoon 12 pm, evening 7 pm (`research/features.md` §3) | "tomorrow at 9 am" | Ask "What time?" with the named time as an option |
 | D3 | A timed task gets one at-due reminder (Settings: "default reminder for timed tasks") | "reminder on" in `display`; speech says "I'll remind you" | No reminder unless "remind me" is said |
 
@@ -1587,7 +1588,7 @@ The import summary screen shows counts per entity, "kept your changes", and the 
    "open_tasks":[],
    "expect":{"status":"done","intent":"create","title":"Call Amira",
              "due":{"date":"2026-10-27","time":"17:00","zone":null},"recurrence":null,
-             "reminder":"AT_DUE","project":"Inbox","priority":4,
+             "reminder":"SCHEDULE","project":"Inbox","priority":4,
              "speech":"Okay. I'll remind you to call Amira today at 5 pm."}}
   ```
   Follow-up cases add `"after":"<id of the case it answers>"`; the runner replays that case first.
@@ -1656,9 +1657,12 @@ Seed cases. All have now = **Tue 27 Oct 2026 14:03, Europe/London (GMT), h12**, 
 | 44 | (after 1, same client) push that to tomorrow | done; "Call Amira" moved to 2026-10-28 17:00 (time kept, referent) |
 | 45 | (in-app quick-add bar) every day at 7 take the bins out | needs_input expects=time; "7 in the morning or the evening?" |
 
+D3 is replaced by 8.6: "reminder at due" in rows 1, 22 and 29 means the task gets its tag schedule (`reminder`
+is `SCHEDULE` in the corpus, `AT_INSTANT` for "in N minutes").
+
 ### 13.2 Property tests (time math)
 
-Use `kotest-property` (verify the current version when wiring). Generators cover:
+Use `kotest-property` (verified 2026-11-02: 6.2.6 resolves and compiles with Kotlin 2.4.10 and JVM 17). Generators cover:
 
 - instants 2000-2040;
 - zones: Europe/London, America/New_York, Australia/Lord_Howe (30-minute DST), Asia/Kolkata (no
