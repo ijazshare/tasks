@@ -19,3 +19,4 @@ keystore.properties
 *.iml
 .DS_Store
 *.log
+backup-db-*.tar
