@@ -22,6 +22,9 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    // MigrationTestHelper reads the exported schemas (1.json, 2.json) as test assets.
+    sourceSets.getByName("androidTest").assets.directories.add("$projectDir/schemas")
+
     buildTypes {
         debug {
             applicationIdSuffix = ".debug"
@@ -111,6 +114,7 @@ dependencies {
     testImplementation(libs.junit)
     testImplementation(libs.truth)
 
+    androidTestImplementation(libs.androidx.room.testing)
     androidTestImplementation(libs.truth)
     androidTestImplementation(libs.androidx.test.junit)
     androidTestImplementation(libs.androidx.test.runner)
