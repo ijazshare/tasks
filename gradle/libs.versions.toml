@@ -1,0 +1,66 @@
+# Version catalog for Tasks, mirrored from Assistant's (themachine/gradle/libs.versions.toml).
+# Versions shared with Assistant are identical; Room and KSP are the only additions.
+
+[versions]
+# ---- Build toolchain ----
+agp = "9.4.0"
+kotlin = "2.4.10"
+# KSP2 versions independently of Kotlin; 2.3.13 is the newest on Maven Central.
+ksp = "2.3.13"
+
+# ---- Android platform ----
+# API 37 = Android 17. AGP 9.4.0 caps out at API 37, so this is the ceiling.
+compileSdk = "37"
+targetSdk = "37"
+minSdk = "33"
+buildTools = "36.0.0"
+
+# ---- Kotlin ecosystem ----
+coroutines = "1.11.0"
+serializationJson = "1.11.0"
+
+# ---- AndroidX / Jetpack ----
+composeBom = "2026.08.00"
+androidxCore = "1.19.0"
+androidxActivity = "1.13.0"
+room = "2.8.5"
+
+# ---- Static analysis / formatting ----
+spotless = "8.10.1"
+ktlint = "1.8.0"
+detekt = "1.23.8"
+
+# ---- Test ----
+junit = "4.13.2"
+truth = "1.4.5"
+
+[libraries]
+kotlinx-coroutines-android = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-android", version.ref = "coroutines" }
+kotlinx-serialization-json = { group = "org.jetbrains.kotlinx", name = "kotlinx-serialization-json", version.ref = "serializationJson" }
+
+# ---- Compose (concrete versions come from the BOM) ----
+compose-bom = { group = "androidx.compose", name = "compose-bom", version.ref = "composeBom" }
+compose-ui = { group = "androidx.compose.ui", name = "ui" }
+compose-ui-tooling = { group = "androidx.compose.ui", name = "ui-tooling" }
+compose-material3 = { group = "androidx.compose.material3", name = "material3" }
+
+# ---- AndroidX ----
+androidx-core = { group = "androidx.core", name = "core", version.ref = "androidxCore" }
+androidx-activity-compose = { group = "androidx.activity", name = "activity-compose", version.ref = "androidxActivity" }
+androidx-room-runtime = { group = "androidx.room", name = "room-runtime", version.ref = "room" }
+androidx-room-compiler = { group = "androidx.room", name = "room-compiler", version.ref = "room" }
+
+# ---- Test ----
+junit = { group = "junit", name = "junit", version.ref = "junit" }
+truth = { group = "com.google.truth", name = "truth", version.ref = "truth" }
+
+# ---- Referenced from the detekt plugin configuration, not from app dependencies ----
+detekt-formatting = { group = "io.gitlab.arturbosch.detekt", name = "detekt-formatting", version.ref = "detekt" }
+
+[plugins]
+android-application = { id = "com.android.application", version.ref = "agp" }
+kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
+kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
+ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
+spotless = { id = "com.diffplug.spotless", version.ref = "spotless" }
+detekt = { id = "io.gitlab.arturbosch.detekt", version.ref = "detekt" }
