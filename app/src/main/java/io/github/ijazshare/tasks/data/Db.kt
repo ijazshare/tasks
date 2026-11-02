@@ -23,9 +23,10 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalTime
 
-// Schema v1, spec section 5. Ids are random strings, timestamps are epoch ms, dates and
-// times are ISO strings. Columns carry the property name (camelCase); `order` is reserved
-// in SQL, so the property is `sortOrder`. Everything soft-deletes through `deletedAt`.
+// Schema v1, spec section 5 (rewritten in place after M0: FTS fix, `reminder.unseen`).
+// Ids are random strings, timestamps are epoch ms, dates and times are ISO strings. Columns carry
+// the property name (camelCase); `order` is reserved in SQL, so the property is `sortOrder`.
+// Everything soft-deletes through `deletedAt`.
 
 @Entity(tableName = "project", indices = [Index("parentId", "nameKey")])
 data class Project(
@@ -97,10 +98,14 @@ data class Task(
     val sourceUtterance: String?,
 )
 
-/** Full-text index over task titles; Room keeps it in sync with `task`. */
-@Fts4(contentEntity = Task::class)
+/**
+ * Full-text index over task titles. Not an external-content table: `task` has a text primary
+ * key, so an FTS rowid link to it is not stable (VACUUM may renumber rowids). Each row carries
+ * the task id instead, and the Repository keeps the rows in step with the titles.
+ */
+@Fts4(notIndexed = ["taskId"])
 @Entity(tableName = "task_fts")
-data class TaskFts(val title: String)
+data class TaskFts(val taskId: String, val title: String)
 
 @Entity(tableName = "task_label", primaryKeys = ["taskId", "labelId"])
 data class TaskLabel(val taskId: String, val labelId: String)
@@ -119,6 +124,8 @@ data class Reminder(
     val nextFireAt: Instant?,
     val lastFiredAt: Instant?,
     val snoozedUntil: Instant?,
+    /** Delivered and not yet swiped, opened or answered; shown once more after a reboot (8.4). */
+    val unseen: Boolean,
     val createdAt: Instant,
     val updatedAt: Instant,
     val deletedAt: Instant?,
@@ -247,6 +254,8 @@ class Converters {
 )
 @TypeConverters(Converters::class)
 abstract class TasksDb : RoomDatabase() {
+    abstract fun dao(): TasksDao
+
     companion object {
         @Volatile private var instance: TasksDb? = null
 

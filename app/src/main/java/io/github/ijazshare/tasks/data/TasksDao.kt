@@ -1,0 +1,80 @@
+/*
+ * Tasks — an offline task app for Android.
+ * Copyright (C) 2026 Hasan Ismail
+ *
+ * This program is free software: you can redistribute it and/or modify it under
+ * the terms of the GNU Affero General Public License as published by the Free
+ * Software Foundation, either version 3 of the License, or (at your option) any
+ * later version. See the LICENSE file in the project root for the full text.
+ */
+package io.github.ijazshare.tasks.data
+
+import androidx.room.Dao
+import androidx.room.Insert
+import androidx.room.OnConflictStrategy
+import androidx.room.Query
+import androidx.room.Upsert
+import kotlinx.coroutines.flow.Flow
+import java.time.LocalDate
+
+@Suppress("TooManyFunctions") // one DAO for one small schema; splitting it adds nothing
+@Dao
+interface TasksDao {
+    @Query("SELECT * FROM task WHERE id = :id AND deletedAt IS NULL")
+    suspend fun task(id: String): Task?
+
+    @Upsert
+    suspend fun upsert(task: Task)
+
+    @Upsert
+    suspend fun upsert(reminders: List<Reminder>)
+
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insert(project: Project): Long
+
+    @Insert
+    suspend fun insert(log: CompletionLog)
+
+    @Query("DELETE FROM task_fts WHERE taskId = :id")
+    suspend fun deleteFts(id: String)
+
+    @Query("INSERT INTO task_fts(taskId, title) VALUES (:id, :title)")
+    suspend fun insertFts(id: String, title: String)
+
+    /** Open tasks with a due before [until], overdue ones included. */
+    @Query(
+        "SELECT * FROM task WHERE completedAt IS NULL AND deletedAt IS NULL AND dueDate IS NOT NULL " +
+            "AND dueDate < :until ORDER BY dueDate, dueTime IS NULL, dueTime, sortOrder, createdAt",
+    )
+    fun dated(until: LocalDate): Flow<List<Task>>
+
+    @Query(
+        "SELECT * FROM task WHERE projectId = :projectId AND completedAt IS NULL AND deletedAt IS NULL " +
+            "ORDER BY dueDate IS NULL, dueDate, dueTime IS NULL, dueTime, sortOrder, createdAt",
+    )
+    fun inProject(projectId: String): Flow<List<Task>>
+
+    @Query("SELECT * FROM project WHERE deletedAt IS NULL AND isArchived = 0 ORDER BY isInbox DESC, sortOrder, nameKey")
+    fun projects(): Flow<List<Project>>
+
+    @Query("SELECT * FROM project WHERE nameKey = :key AND parentId IS NULL AND deletedAt IS NULL")
+    suspend fun projectByKey(key: String): Project?
+
+    @Query("SELECT COALESCE(MAX(sortOrder), 0) + 1 FROM project")
+    suspend fun nextProjectOrder(): Int
+
+    @Query(
+        "SELECT * FROM task WHERE completedAt IS NULL AND deletedAt IS NULL " +
+            "AND dueDate IS NOT NULL AND dueTime IS NOT NULL",
+    )
+    suspend fun timedOpenTasks(): List<Task>
+
+    @Query("SELECT * FROM reminder WHERE deletedAt IS NULL")
+    suspend fun liveReminders(): List<Reminder>
+
+    @Query("SELECT * FROM reminder WHERE taskId = :taskId")
+    suspend fun remindersOf(taskId: String): List<Reminder>
+
+    @Query("UPDATE reminder SET unseen = 0 WHERE taskId = :taskId")
+    suspend fun markSeen(taskId: String)
+}
