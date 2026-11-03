@@ -133,10 +133,11 @@ dependencies {
 // still runs it (it proves every screen composes) but writes nothing. Record with:
 //   ./gradlew testDebugUnitTest --tests '*ScreenshotsTest' -PrecordScreens
 // Robolectric would otherwise download its Android jars into ~/.m2, outside the dev folder, so the test JVM
-// gets its own user.home inside it (first run needs the network once).
+// gets its own user.home inside it (first run needs the network once). CI keeps the runner's own home:
+// that folder does not exist there, and Robolectric fails to create its lock file in it.
 tasks.withType<Test>().configureEach {
     val dev = System.getenv("ASSISTANT_DEV") ?: rootDir.parent
-    systemProperty("user.home", "$dev/tools/robolectric-home")
+    if (System.getenv("CI") == null) systemProperty("user.home", "$dev/tools/robolectric-home")
     if (project.hasProperty("recordScreens")) {
         systemProperty("roborazzi.test.record", "true")
         systemProperty("screens.dir", "$dev/design/screens/tasks")
