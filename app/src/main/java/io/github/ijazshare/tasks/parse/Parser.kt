@@ -80,6 +80,8 @@ data class Draft(
     val target: Target? = null,
     val scope: String? = null,
     val snooze: Duration? = null,
+    /** "the next day": the handler moves the referent this many days past its own due date. */
+    val shiftDays: Int? = null,
     val rambleBody: String? = null,
     val newName: String? = null,
     val recText: String? = null,
@@ -166,7 +168,7 @@ internal fun work(text: String): String = buildString(text.length) {
     }
 }.let { if (it.length == text.length) it else text.map { ch -> ch }.joinToString("") }
 
-private val fillerStart = Regex("^\\s*(?:(?:okay|ok|hey|so|right|please|um|uh)\\b[,.]?\\s*)+")
+private val fillerStart = Regex("^\\s*(?:(?:okay|ok|hey|so|right|please|um|uh|actually)\\b[,.]?\\s*)+")
 
 private val protectedRes = listOf(
     Regex("\"[^\"]+\"|(?<![\\p{L}\\p{N}])'[^']+'(?![\\p{L}\\p{N}])"),
@@ -863,7 +865,7 @@ private val reQuery = Regex(
         "my tasks|my to-?do list|to-?do list|what(?:'s| is) overdue|is anything overdue)\\b",
 )
 private val completeRes = listOf(
-    Regex("^mark (.+?) (?:as |has )?(?:done|complete|completed|finished)$"),
+    Regex("^mark,? (.+?),? (?:as |has )?(?:done|complete|completed|finished)$"),
     Regex("^(?:tick|cross|check) off (.+)$"),
     Regex("^(?:tick|cross|check) (.+?) off$"),
     Regex("^(?:complete|finish) (.+)$"),
@@ -888,8 +890,15 @@ private val reFind = Regex(
 // "is there a watering task": the word before "task" is the search word.
 private val reFindWord = Regex("^(?:is there|are there|do i have|have i got) (?:an?|any) (\\p{L}+) tasks?$")
 
-// Bare "done" / "it's done" / "that's done" / Whisper's "market done": complete the referent.
-private val reDoneBare = Regex("^(?:(?:it|that)(?:'s| is) )?done$|^market done$")
+// Bare "done" / "it's done" / "that's done" / "mark done" / Whisper's "market done" and "work it done"
+// (small.en's hearing of "mark it done"): complete the referent. Keep the mishearing list tight.
+private val reDoneBare = Regex("^(?:(?:it|that)(?:'s| is) )?done$|^mark,? done$|^market done$|^work it done$")
+
+// "push it to the next day" / "the day after" / "the following day": one day past the referent's own due date.
+private val reShiftDay = Regex(
+    "^(?:move|push|reschedule|postpone|put off|shift) (it|that|this|that task|(?:the )?\\p{L}+ task)(?: back)? " +
+        "(?:(?:to|until|till|for) )?(?:the )?(?:next day|day after|following day)$",
+)
 private val reMoveList = Regex("^(?:the |my )?(.+?) (?:list|project)$")
 private val reAddLabel = Regex("^(?:add|put) (?:the )?(?:label|tag) (\\S+) (?:to|on) (.+)$")
 private val reRemind = Regex("^(?:(urgent(?:ly)?)[, ]+)?remind me\\b")
@@ -1018,6 +1027,14 @@ fun scan(text: String, ctx: ParseContext): Draft {
                 intent = Intent.CHANGE,
                 target = tgt(text.substring(g.range.first + start, g.range.last + 1 + start)),
                 labels = listOf(Cand(text.substring(l.range.first + start, l.range.last + 1 + start), off(l.range))),
+            )
+        }
+        reShiftDay.find(body)?.let { m ->
+            val g = m.groups[1]!!
+            return d.copy(
+                intent = Intent.RESCHEDULE,
+                target = tgt(text.substring(g.range.first + start, g.range.last + 1 + start)),
+                shiftDays = 1,
             )
         }
         (reMove.find(body) ?: reMoveBare.find(body))?.let { m ->

@@ -132,6 +132,7 @@ data class ParseResult(
     val target: Target? = null,
     val scope: String? = null,
     val snooze: Duration? = null,
+    val shiftDays: Int? = null,
     val keepTime: Boolean = false,
     val allDayDue: Boolean = false,
     val rambleBody: String? = null,

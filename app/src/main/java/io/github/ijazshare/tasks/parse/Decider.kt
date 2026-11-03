@@ -247,7 +247,7 @@ internal object Decider {
         priority = d.priority?.let { SlotValue.Parsed(it.v, it.span) } ?: SlotValue.Absent, project = SlotValue.Absent,
         labels = emptyList(), unresolved = d.unresolved, selfCorrection = d.cue != null, appliedDefaults = emptyList(),
         verdict = verdict, chips = d.chips, description = d.description, durationMin = d.durationMin, target = d.target,
-        scope = d.scope, snooze = d.snooze, rambleBody = d.rambleBody, taskId = d.taskId,
+        scope = d.scope, snooze = d.snooze, shiftDays = d.shiftDays, rambleBody = d.rambleBody, taskId = d.taskId,
     )
 
     private fun ask(d: Draft, ctx: ParseContext, expects: String, text: String, options: List<Option> = emptyList(), due: SlotValue<DueSpec> = SlotValue.Absent): Nothing =
@@ -500,7 +500,9 @@ internal object Decider {
         if (rec != null) return recurring(d, ctx, r0, rec, dateC, timeC, span)
 
         // One-off: date, then time.
-        var date: LocalDate? = dateC?.let { resolveDate(d, ctx, it) }
+        // "the next day" with no due date on the task means tomorrow; the handler adds the task's own date.
+        var date: LocalDate? =
+            dateC?.let { resolveDate(d, ctx, it) } ?: d.shiftDays?.let { today.plusDays(it.toLong()) }
         var time: LocalTime? = null
         var rolled = false
         if (timeC != null) {

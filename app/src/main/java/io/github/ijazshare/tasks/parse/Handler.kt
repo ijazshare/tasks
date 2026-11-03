@@ -355,7 +355,11 @@ class CommandHandler(private val store: TaskStore, private val settings: ParseSe
                 val nd = (r.due as? SlotValue.Parsed)?.v
                     ?: return Response("declined", "I need a day or a time to move it to.", r.intent, parse = r)
                 val instant = (r.reminder as? SlotValue.Parsed)?.v?.kind == "AT_INSTANT"
-                val due = if (!instant && r.keepTime) DueSpec(nd.date, task.due?.time, task.due?.zone) else nd
+                val shifted = r.shiftDays?.let { n ->
+                    task.due?.let { DueSpec(it.date.plusDays(n.toLong()), it.time, it.zone) }
+                }
+                val due =
+                    shifted ?: if (!instant && r.keepTime) DueSpec(nd.date, task.due?.time, task.due?.zone) else nd
                 store.reschedule(task.id, due)
                 remember(client, task.id, now)
                 Response(
