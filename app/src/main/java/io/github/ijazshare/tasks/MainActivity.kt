@@ -1,6 +1,6 @@
 /*
  * Tasks — an offline task app for Android.
- * Copyright (C) 2026 Hasan Ismail
+ * Copyright (C) 2026 ijazshare
  *
  * This program is free software: you can redistribute it and/or modify it under
  * the terms of the GNU Affero General Public License as published by the Free
@@ -281,12 +281,15 @@ private fun TasksApp(
                 if (missed.isNotEmpty() && !showMissed) {
                     TextButton(onClick = { showMissed = true }) { Text("$MISSED_TITLE (${missed.size})") }
                 }
-                if (HAS_CONSOLE) {
+                // Console and Setup are exclusive, so only one "Back" ever shows.
+                if (HAS_CONSOLE && !setup) {
                     TextButton(onClick = {
                         console = !console
                     }) { Text(if (console) "Back" else "Console") }
                 }
-                TextButton(onClick = { setup = !setup }) { Text(if (setup) "Back" else "Setup") }
+                if (!console) {
+                    TextButton(onClick = { setup = !setup }) { Text(if (setup) "Back" else "Setup") }
+                }
                 // Settings will own the export in a later milestone; until then it lives in the header.
                 TextButton(onClick = { save.launch("tasks-export-${LocalDate.now()}.json") }) { Text("Export") }
             }
