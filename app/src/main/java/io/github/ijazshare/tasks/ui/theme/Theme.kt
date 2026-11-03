@@ -10,8 +10,10 @@
 package io.github.ijazshare.tasks.ui.theme
 
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.graphics.Color
 
 /**
  * The app has one look, dark, and does not follow the system theme or dynamic
@@ -38,7 +40,8 @@ private val TasksScheme = darkColorScheme(
     outlineVariant = TasksColors.Rule,
     error = TasksColors.Relevant,
     onError = TasksColors.Void,
-    errorContainer = TasksColors.Panel,
+    // Not Panel: contentColorFor(Panel) would otherwise resolve to orange and tint every panel's text.
+    errorContainer = Color(0xFF2A1710),
     onErrorContainer = TasksColors.Relevant,
 )
 
@@ -47,6 +50,7 @@ fun TasksTheme(content: @Composable () -> Unit) {
     MaterialTheme(
         colorScheme = TasksScheme,
         typography = TasksTypography,
-        content = content,
+        // A root Surface sets the default text colour, so a screen outside a Scaffold is never black on navy.
+        content = { Surface(color = TasksColors.Void, contentColor = TasksColors.Bone, content = content) },
     )
 }

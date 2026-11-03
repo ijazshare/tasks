@@ -103,7 +103,7 @@ fun nextAlerts(reminders: List<Reminder>): Map<String, Instant> = reminders.filt
 /** "Tue 3 Nov · 5 open": the count changes as tasks are done, so it earns its place under the title. */
 fun todaySubtitle(today: LocalDate, dated: List<Task>, undated: List<Task>): String {
     val open = dated.count { it.dueDate!! <= today } + undated.size
-    return "${dateText(today)} · $open open"
+    return if (open == 0) dateText(today) else "${dateText(today)} · $open open"
 }
 
 /** Top of Today and Upcoming: title, the filter and menu icons, and the active-filter chip when one is set. */

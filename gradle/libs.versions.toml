@@ -36,6 +36,10 @@ truth = "1.4.5"
 kotest = "6.2.6"
 androidxTestJunit = "1.3.0"
 androidxTestRunner = "1.7.0"
+# Screenshot tests only (testImplementation): Robolectric renders Compose on the JVM, Roborazzi writes PNGs.
+# Newest stable on Maven Central 2026-11-03 (Robolectric 4.17-beta-* skipped).
+robolectric = "4.17"
+roborazzi = "1.77.0"
 
 [libraries]
 kotlinx-coroutines-android = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-android", version.ref = "coroutines" }
@@ -59,6 +63,10 @@ junit = { group = "junit", name = "junit", version.ref = "junit" }
 kotest-property = { group = "io.kotest", name = "kotest-property", version.ref = "kotest" }
 truth = { group = "com.google.truth", name = "truth", version.ref = "truth" }
 androidx-test-junit = { group = "androidx.test.ext", name = "junit", version.ref = "androidxTestJunit" }
+robolectric = { group = "org.robolectric", name = "robolectric", version.ref = "robolectric" }
+roborazzi = { group = "io.github.takahirom.roborazzi", name = "roborazzi", version.ref = "roborazzi" }
+roborazzi-compose = { group = "io.github.takahirom.roborazzi", name = "roborazzi-compose", version.ref = "roborazzi" }
+compose-ui-test-junit4 = { group = "androidx.compose.ui", name = "ui-test-junit4" }
 androidx-test-runner = { group = "androidx.test", name = "runner", version.ref = "androidxTestRunner" }
 
 # ---- Referenced from the detekt plugin configuration, not from app dependencies ----

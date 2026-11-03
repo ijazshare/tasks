@@ -51,6 +51,8 @@ android {
     testOptions {
         unitTests {
             isReturnDefaultValues = true
+            // Robolectric needs the merged resources and manifest (fonts, theme) for the screenshot tests.
+            isIncludeAndroidResources = true
         }
     }
 
@@ -115,9 +117,29 @@ dependencies {
     testImplementation(libs.junit)
     testImplementation(libs.truth)
     testImplementation(libs.kotest.property)
+    // Screenshot tests (src/test/.../shots). Test-only: none of this reaches the APK.
+    testImplementation(libs.robolectric)
+    testImplementation(libs.roborazzi)
+    testImplementation(libs.roborazzi.compose)
+    testImplementation(libs.compose.ui.test.junit4)
 
     androidTestImplementation(libs.androidx.room.testing)
     androidTestImplementation(libs.truth)
     androidTestImplementation(libs.androidx.test.junit)
     androidTestImplementation(libs.androidx.test.runner)
+}
+
+// Screenshots: the ScreenshotsTest class only draws PNGs when -PrecordScreens is given, so the normal gate
+// still runs it (it proves every screen composes) but writes nothing. Record with:
+//   ./gradlew testDebugUnitTest --tests '*ScreenshotsTest' -PrecordScreens
+// Robolectric would otherwise download its Android jars into ~/.m2, outside the dev folder, so the test JVM
+// gets its own user.home inside it (first run needs the network once).
+tasks.withType<Test>().configureEach {
+    val dev = System.getenv("ASSISTANT_DEV") ?: rootDir.parent
+    systemProperty("user.home", "$dev/tools/robolectric-home")
+    if (project.hasProperty("recordScreens")) {
+        systemProperty("roborazzi.test.record", "true")
+        systemProperty("screens.dir", "$dev/design/screens/tasks")
+        outputs.upToDateWhen { false }
+    }
 }

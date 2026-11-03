@@ -195,8 +195,10 @@ fun TaskEditor(
         OutlinedTextField(title, { title = it }, Modifier.fillMaxWidth(), label = { Text("Title") })
         OutlinedTextField(description, { description = it }, Modifier.fillMaxWidth(), label = { Text("Description") })
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-            OutlinedButton(onClick = { pickDate = true }) { Text(date?.let(::dateText) ?: "Set date") }
-            OutlinedButton(onClick = { pickTime = true }, enabled = date != null) {
+            OutlinedButton(onClick = {
+                pickDate = true
+            }, shape = HaloShape.chip) { Text(date?.let(::dateText) ?: "Set date") }
+            OutlinedButton(onClick = { pickTime = true }, enabled = date != null, shape = HaloShape.chip) {
                 Text(
                     minutes?.let {
                         timeText(LocalTime.of(it / MINUTES_PER_HOUR, it % MINUTES_PER_HOUR))
