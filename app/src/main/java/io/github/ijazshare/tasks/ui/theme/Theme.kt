@@ -22,11 +22,11 @@ import androidx.compose.runtime.Composable
  * the wrong idea.
  */
 private val TasksScheme = darkColorScheme(
-    primary = TasksColors.Bone,
+    primary = TasksColors.Admin,
     onPrimary = TasksColors.Void,
     secondary = TasksColors.Irrelevant,
     onSecondary = TasksColors.Void,
-    tertiary = TasksColors.Admin,
+    tertiary = TasksColors.Asset,
     onTertiary = TasksColors.Void,
     background = TasksColors.Void,
     onBackground = TasksColors.Bone,
@@ -37,7 +37,7 @@ private val TasksScheme = darkColorScheme(
     outline = TasksColors.Rule,
     outlineVariant = TasksColors.Rule,
     error = TasksColors.Relevant,
-    onError = TasksColors.Bone,
+    onError = TasksColors.Void,
     errorContainer = TasksColors.Panel,
     onErrorContainer = TasksColors.Relevant,
 )

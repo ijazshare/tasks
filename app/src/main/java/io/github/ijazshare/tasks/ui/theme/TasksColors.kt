@@ -41,8 +41,11 @@ object TasksColors {
     /** Secondary readout: labels, units, timestamps. */
     val Dim = Color(0xFF83AAC6)
 
-    /** Tertiary: hint text, disabled. */
-    val Ghost = Color(0xFF4C6D84)
+    /**
+     * Tertiary: hints and disabled. Raised from Assistant's #4C6D84 (3.3:1) so it passes AA as text; the
+     * contrast test pins this. Assistant keeps its own value until it adopts the same fix.
+     */
+    val Ghost = Color(0xFF7597AF)
 
     // ---- HUD accents ------------------------------------------------------------
 

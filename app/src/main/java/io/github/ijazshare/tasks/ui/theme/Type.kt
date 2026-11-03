@@ -13,60 +13,53 @@ import androidx.compose.material3.Typography
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.sp
 
 /**
- * The device's own sans-serif family. Clean and modern, and using the system font
- * keeps the APK small and avoids a font licence to account for in the attribution
- * table. The old monospace terminal look is gone; a couple of numeric readouts still
- * ask for tabular figures where columns must line up.
+ * The device's own sans-serif: clean, small APK, no font licence to account for. Every style asks for
+ * tabular figures ("tnum") so times and counts do not jitter as they change. The scale follows the design
+ * brief (8.2): one big title, one row title, quiet meta.
  */
-private val Sans = FontFamily.Default
-
-/** Small tracked labels: section headers, units, captions. */
-val TasksLabel = TextStyle(
-    fontFamily = Sans,
-    fontWeight = FontWeight.Medium,
-    fontSize = 12.sp,
-    lineHeight = 16.sp,
-    letterSpacing = 0.4.sp,
+private fun style(size: Int, line: Int, weight: FontWeight, tracking: TextUnit = 0.sp) = TextStyle(
+    fontFamily = FontFamily.Default,
+    fontWeight = weight,
+    fontSize = size.sp,
+    lineHeight = line.sp,
+    letterSpacing = tracking,
+    fontFeatureSettings = "tnum",
 )
 
-/** Status lines and titles: Listening, Alarm set, the app name. */
-val TasksStatus = TextStyle(
-    fontFamily = Sans,
-    fontWeight = FontWeight.SemiBold,
-    fontSize = 22.sp,
-    lineHeight = 28.sp,
-    letterSpacing = 0.sp,
-)
+/** Big readout and empty-state title. */
+val TasksDisplay = style(34, 40, FontWeight.SemiBold)
 
-/** Body / numeric readouts — timings, sizes, percentages. */
-val TasksReadout = TextStyle(
-    fontFamily = Sans,
-    fontWeight = FontWeight.Normal,
-    fontSize = 14.sp,
-    lineHeight = 19.sp,
-    letterSpacing = 0.1.sp,
-)
+/** Screen title. */
+val TasksTitle = style(24, 30, FontWeight.SemiBold)
 
-/** Denser body, for longer diagnostic text. */
-val TasksDump = TextStyle(
-    fontFamily = Sans,
-    fontWeight = FontWeight.Normal,
-    fontSize = 13.sp,
-    lineHeight = 18.sp,
-    letterSpacing = 0.sp,
-)
+/** List section headers: shown in caps by the caller. */
+val TasksSection = style(12, 16, FontWeight.Medium, 0.8.sp)
+
+/** Task title, menu row: the thing that is tapped. */
+val TasksRowTitle = style(17, 22, FontWeight.Medium)
+
+val TasksBody = style(15, 21, FontWeight.Normal)
+
+/** Times, counts, muted detail. The smallest text in the app. */
+val TasksMeta = style(13, 18, FontWeight.Normal)
+
+val TasksLabel = style(12, 16, FontWeight.Medium, 0.4.sp)
 
 val TasksTypography = Typography(
-    displayLarge = TasksStatus.copy(fontSize = 34.sp),
-    headlineMedium = TasksStatus.copy(fontSize = 26.sp),
-    headlineSmall = TasksStatus,
-    titleMedium = TasksLabel.copy(fontSize = 15.sp, fontWeight = FontWeight.SemiBold),
-    titleSmall = TasksLabel.copy(fontSize = 13.sp),
-    bodyMedium = TasksReadout.copy(fontSize = 15.sp),
-    bodySmall = TasksDump,
-    labelSmall = TasksLabel.copy(fontSize = 11.sp),
+    displayLarge = TasksDisplay,
+    headlineMedium = TasksDisplay.copy(fontSize = 28.sp, lineHeight = 34.sp),
+    headlineSmall = TasksTitle,
+    titleLarge = TasksTitle,
+    titleMedium = TasksRowTitle,
+    titleSmall = TasksSection,
+    bodyLarge = TasksRowTitle,
+    bodyMedium = TasksBody,
+    bodySmall = TasksMeta,
+    labelLarge = TasksLabel.copy(fontSize = 14.sp, lineHeight = 20.sp),
     labelMedium = TasksLabel,
+    labelSmall = TasksLabel.copy(fontSize = 11.sp),
 )
