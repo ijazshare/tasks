@@ -136,7 +136,7 @@ fun Composer(
             label = {
                 Text(
                     reply?.takeIf { it.status == "needs_input" }?.speech
-                        ?: "Like: call Amira tomorrow 5pm #Home %errands",
+                        ?: "Like: call Amira tomorrow 5pm %errands",
                 )
             },
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
