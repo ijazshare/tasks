@@ -24,6 +24,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
@@ -36,6 +37,8 @@ import androidx.compose.ui.unit.dp
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.getSystemService
 import androidx.core.net.toUri
+import io.github.ijazshare.tasks.ui.theme.HaloShape
+import io.github.ijazshare.tasks.ui.theme.TasksColors
 
 /** Live state of the three things a reminder needs (spec 8.4, 9). */
 data class SetupState(val notifications: Boolean, val exactAlarms: Boolean, val batteryUnrestricted: Boolean) {
@@ -59,18 +62,32 @@ fun SetupScreen(tick: Int) {
         // A denial the system will not ask about again: send the user to the switch instead.
         if (!granted) context.startActivity(notificationSettings(context))
     }
-    Column(Modifier.padding(top = 8.dp)) {
-        Text("Reminders only fire on time when all three are on.", color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Item("Notifications", state.notifications, "Allow") { ask.launch(Manifest.permission.POST_NOTIFICATIONS) }
-        Item("Exact alarms", state.exactAlarms, "Open settings") {
+    SetupContent(
+        state,
+        onNotifications = { ask.launch(Manifest.permission.POST_NOTIFICATIONS) },
+        onExactAlarms = {
             context.startActivity(
                 Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM, "package:${context.packageName}".toUri()),
             )
-        }
-        Item("Battery: Unrestricted", state.batteryUnrestricted, "Open settings") {
-            // Find Tasks in the list and choose Unrestricted; an optimised app may be put to sleep.
-            context.startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
-        }
+        },
+        // Find Tasks in the list and choose Unrestricted; an optimised app may be put to sleep.
+        onBattery = { context.startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)) },
+    )
+}
+
+/** The screen without the system calls, so a screenshot test can show each state. */
+@Composable
+fun SetupContent(state: SetupState, onNotifications: () -> Unit, onExactAlarms: () -> Unit, onBattery: () -> Unit) {
+    Column(Modifier.padding(horizontal = 16.dp)) {
+        Text(
+            "Reminders only fire on time when all three are on.",
+            Modifier.padding(bottom = 8.dp),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Item("Notifications", state.notifications, "Allow", onNotifications)
+        Item("Exact alarms", state.exactAlarms, "Open settings", onExactAlarms)
+        Item("Battery: Unrestricted", state.batteryUnrestricted, "Open settings", onBattery)
     }
 }
 
@@ -79,15 +96,18 @@ private fun notificationSettings(context: Context) =
 
 @Composable
 private fun Item(label: String, ok: Boolean, action: String, onClick: () -> Unit) {
-    Row(Modifier.fillMaxWidth().heightIn(min = 56.dp), verticalAlignment = Alignment.CenterVertically) {
-        Column(Modifier.weight(1f)) {
-            Text(label, style = MaterialTheme.typography.bodyLarge)
-            Text(
-                if (ok) "OK" else "Needs attention",
-                style = MaterialTheme.typography.bodySmall,
-                color = if (ok) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.error,
-            )
+    Column {
+        Row(Modifier.fillMaxWidth().heightIn(min = 64.dp), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text(label, style = MaterialTheme.typography.titleMedium)
+                Text(
+                    if (ok) "OK" else "Needs attention",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (ok) TasksColors.Asset else TasksColors.Relevant,
+                )
+            }
+            if (!ok) OutlinedButton(onClick = onClick, shape = HaloShape.chip) { Text(action) }
         }
-        if (!ok) OutlinedButton(onClick = onClick) { Text(action) }
+        HorizontalDivider(color = TasksColors.Rule)
     }
 }

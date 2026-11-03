@@ -7,19 +7,22 @@
  * Software Foundation, either version 3 of the License, or (at your option) any
  * later version. See the LICENSE file in the project root for the full text.
  */
-@file:Suppress("ktlint:standard:max-line-length", "MaxLineLength")
-
 package io.github.ijazshare.tasks.ui
 
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AssistChip
+import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -38,41 +41,44 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
-import io.github.ijazshare.tasks.parse.CommandHandler
 import io.github.ijazshare.tasks.parse.OpenTask
 import io.github.ijazshare.tasks.parse.ParseContext
 import io.github.ijazshare.tasks.parse.ProjectInfo
 import io.github.ijazshare.tasks.parse.Request
 import io.github.ijazshare.tasks.parse.Response
 import io.github.ijazshare.tasks.parse.parse
+import io.github.ijazshare.tasks.ui.theme.HaloShape
 import kotlinx.coroutines.launch
 import java.time.ZonedDateTime
 
 /**
- * The typed quick-add bar (spec 6.3): chips show what was understood as you type, and a tapped chip is turned
- * back into plain title text. Saving goes through the same [CommandHandler] as everything else; a question
- * (needs_input) shows its options under the field and the next send answers it.
+ * The composer (spec 6.3, brief 3.2): one text field, a live preview of what was understood, "More options"
+ * and Add. Chips show the parse as you type, and a tapped chip is turned back into plain title text. Saving
+ * goes through the same command handler as everything else ([handle]); a question (needs_input) shows its
+ * options under the field and the next send answers it. A finished add calls [onDone], which closes the sheet.
+ * [handle] is a parameter, not a CommandHandler, so screenshot tests need no database.
  */
 @Composable
-fun QuickAddBar(
-    handler: CommandHandler,
+fun Composer(
+    handle: suspend (Request) -> Response,
     projects: List<String>,
     labels: List<String>,
+    onDone: (Response) -> Unit,
+    onMore: (String) -> Unit,
     prefill: String? = null,
-    focusTick: Int = 0,
     onPrefilled: () -> Unit = {},
 ) {
     val scope = rememberCoroutineScope()
     var text by rememberSaveable { mutableStateOf("") }
     val focus = remember { FocusRequester() }
-    // A share fills the field and waits for the user to press Add; the tile and shortcut just focus it.
+    // A share fills the field and waits for the user to press Add; the tile and shortcut open it empty.
     LaunchedEffect(prefill) {
         if (prefill != null) {
             text = prefill
             onPrefilled()
         }
     }
-    LaunchedEffect(focusTick) { if (focusTick > 0 || prefill != null) focus.requestFocus() }
+    LaunchedEffect(Unit) { focus.requestFocus() }
     var plain by rememberSaveable { mutableStateOf(emptyList<String>()) }
     var reply by remember { mutableStateOf<Response?>(null) }
     val live = remember(text, plain, projects, labels) {
@@ -104,9 +110,11 @@ fun QuickAddBar(
                 typed = true,
                 plain = plain.toSet(),
             )
-            val r = handler.handle(req)
+            val r = handle(req)
             reply = r
-            if (r.status != "needs_input") {
+            if (r.status == "done") {
+                onDone(r)
+            } else if (r.status != "needs_input") {
                 text = ""
                 plain = emptyList()
             } else if (conv != null) {
@@ -115,7 +123,11 @@ fun QuickAddBar(
         }
     }
 
-    Column(Modifier.fillMaxWidth()) {
+    Column(
+        Modifier.fillMaxWidth().imePadding().navigationBarsPadding().padding(horizontal = 16.dp, vertical = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Text("Add a task", style = MaterialTheme.typography.headlineSmall)
         OutlinedTextField(
             value = text,
             onValueChange = { text = it },
@@ -124,12 +136,11 @@ fun QuickAddBar(
             label = {
                 Text(
                     reply?.takeIf { it.status == "needs_input" }?.speech
-                        ?: "Quick add, like: call Amira tomorrow 5pm #Home %errands",
+                        ?: "Like: call Amira tomorrow 5pm #Home %errands",
                 )
             },
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
             keyboardActions = KeyboardActions(onSend = { if (text.isNotBlank()) send() }),
-            trailingIcon = { TextButton(onClick = { send() }, enabled = text.isNotBlank()) { Text("Add") } },
         )
         if (live.isNotEmpty()) {
             Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -141,6 +152,7 @@ fun QuickAddBar(
                     AssistChip(
                         onClick = { plain = plain + word.trim() },
                         label = { Text("${chip.kind}: ${word.trim()}") },
+                        shape = HaloShape.chip,
                     )
                 }
             }
@@ -152,7 +164,7 @@ fun QuickAddBar(
                     TextButton(onClick = { send(optionId = id, answer = label) }) { Text(label) }
                 }
                 TextButton(onClick = {
-                    scope.launch { handler.handle(Request("cancel", now = ZonedDateTime.now(), typed = true)) }
+                    scope.launch { handle(Request("cancel", now = ZonedDateTime.now(), typed = true)) }
                     reply = null
                 }) { Text("Cancel") }
             }
@@ -162,6 +174,11 @@ fun QuickAddBar(
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+        }
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            TextButton(onClick = { onMore(text) }) { Text("More options") }
+            Spacer(Modifier.weight(1f))
+            Button(onClick = { send() }, enabled = text.isNotBlank(), shape = HaloShape.chip) { Text("Add") }
         }
     }
 }
