@@ -76,7 +76,6 @@ import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
-import java.util.Locale
 
 private val dateFormat = DateTimeFormatter.ofPattern("EEE d MMM")
 private val timeFormat = DateTimeFormatter.ofLocalizedTime(FormatStyle.SHORT)
@@ -255,7 +254,7 @@ private fun LazyListScope.header(text: String, onClick: (() -> Unit)? = null, co
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
-                text.uppercase(Locale.getDefault()),
+                text.uppercase(),
                 Modifier.weight(1f),
                 style = MaterialTheme.typography.titleSmall,
                 color = TasksColors.Dim,
