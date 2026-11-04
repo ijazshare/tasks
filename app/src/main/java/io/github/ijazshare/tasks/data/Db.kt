@@ -12,6 +12,7 @@
 package io.github.ijazshare.tasks.data
 
 import android.content.Context
+import androidx.room.ColumnInfo
 import androidx.room.Database
 import androidx.room.Entity
 import androidx.room.Fts4
@@ -29,8 +30,9 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalTime
 
-// Schema v3, spec section 5. v2 added `label.scheduleJson` and `task.missedAt` (MIGRATION_1_2); v3 adds
-// `referent.listedJson`, the ids a query listed, so "which task?" survives a process death (MIGRATION_2_3).
+// Schema v4, spec section 5. v2 added `label.scheduleJson` and `task.missedAt` (MIGRATION_1_2); v3 adds
+// `referent.listedJson`, the ids a query listed, so "which task?" survives a process death (MIGRATION_2_3); v4 adds
+// `place` and `reminder.placeId`/`onLeave` for location reminders (MIGRATION_3_4).
 // Ids are random strings, timestamps are epoch ms, dates and times are ISO strings. Columns carry
 // the property name (camelCase); `order` is reserved in SQL, so the property is `sortOrder`.
 // Everything soft-deletes through `deletedAt`.
@@ -127,7 +129,7 @@ data class TaskLabel(val taskId: String, val labelId: String)
 data class Reminder(
     @PrimaryKey val id: String,
     val taskId: String,
-    /** AT_DUE, BEFORE_DUE, AT_LOCAL or AT_INSTANT. */
+    /** AT_DUE, BEFORE_DUE, AT_LOCAL, AT_INSTANT or AT_PLACE (v4: no time, see [placeId]). */
     val kind: String,
     val offsetMin: Int?,
     val atDate: LocalDate?,
@@ -141,6 +143,22 @@ data class Reminder(
     val unseen: Boolean,
     val createdAt: Instant,
     val updatedAt: Instant,
+    val deletedAt: Instant?,
+    /** AT_PLACE only: the saved place, and whether it fires on leaving rather than arriving. Added in v4. */
+    val placeId: String? = null,
+    @ColumnInfo(defaultValue = "0") val onLeave: Boolean = false,
+)
+
+/** A spot the owner saved from where they stood (no maps, no geocoding). Added in v4. */
+@Entity(tableName = "place", indices = [Index("nameKey")])
+data class Place(
+    @PrimaryKey val id: String,
+    val name: String,
+    val nameKey: String,
+    val lat: Double,
+    val lon: Double,
+    val radiusM: Int,
+    val createdAt: Instant,
     val deletedAt: Instant?,
 )
 
@@ -279,25 +297,40 @@ val MIGRATION_2_3 = object : Migration(2, 3) {
     }
 }
 
+val MIGRATION_3_4 = object : Migration(3, 4) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            "CREATE TABLE IF NOT EXISTS `place` (`id` TEXT NOT NULL, `name` TEXT NOT NULL, `nameKey` TEXT NOT NULL, " +
+                "`lat` REAL NOT NULL, `lon` REAL NOT NULL, `radiusM` INTEGER NOT NULL, `createdAt` INTEGER NOT NULL, " +
+                "`deletedAt` INTEGER, PRIMARY KEY(`id`))",
+        )
+        db.execSQL("CREATE INDEX IF NOT EXISTS `index_place_nameKey` ON `place` (`nameKey`)")
+        db.execSQL("ALTER TABLE reminder ADD COLUMN placeId TEXT")
+        db.execSQL("ALTER TABLE reminder ADD COLUMN onLeave INTEGER NOT NULL DEFAULT 0")
+    }
+}
+
 @Database(
     entities = [
         Project::class, Section::class, Label::class, Task::class, TaskFts::class, TaskLabel::class,
         Reminder::class, CompletionLog::class, UndoJournal::class, Conversation::class, Referent::class,
         RequestLog::class, ImportMap::class, ImportRun::class, Ramble::class, RambleDraft::class,
-        UtteranceLog::class,
+        UtteranceLog::class, Place::class,
     ],
-    version = 3,
+    version = 4,
 )
 @TypeConverters(Converters::class)
 abstract class TasksDb : RoomDatabase() {
     abstract fun dao(): TasksDao
+
+    abstract fun places(): PlaceDao
 
     companion object {
         @Volatile private var instance: TasksDb? = null
 
         fun get(context: Context): TasksDb = instance ?: synchronized(this) {
             instance ?: Room.databaseBuilder(context.applicationContext, TasksDb::class.java, "tasks.db")
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
                 .build()
                 .also { instance = it }
         }

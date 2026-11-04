@@ -9,6 +9,11 @@
     <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
 
+    <!-- Place reminders (platform proximity alerts, no Play Services). Optional: asked for in Setup. -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
+
     <!-- Declared identically by Assistant, so whichever app installs first defines it (spec 4.2.1). -->
     <permission
         android:name="io.github.ijazshare.permission.TASK_COMMAND"
@@ -58,6 +63,10 @@
 
         <receiver
             android:name=".reminders.ReminderReceiver"
+            android:exported="false" />
+
+        <receiver
+            android:name=".reminders.PlaceReceiver"
             android:exported="false" />
 
         <!-- These are protected broadcasts only the system can send, so exporting exposes nothing. -->

@@ -24,6 +24,7 @@ enum class Route(val root: Boolean = false) {
     Missed,
     Completed,
     Setup,
+    Places,
     Console,
 }
 

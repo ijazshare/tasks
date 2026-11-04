@@ -18,7 +18,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 
 /**
- * Migrations 1 to 2 and 2 to 3 on throwaway database files ("migration-test..."), never `tasks.db`: a v1
+ * Migrations 1 to 2, 2 to 3 and 3 to 4 on throwaway database files ("migration-test..."), never `tasks.db`: a v1
  * database with a task, a tag and a reminder keeps every row and gains the two new columns.
  */
 @RunWith(AndroidJUnit4::class)
@@ -86,7 +86,44 @@ class MigrationTest {
         assertThat(one("SELECT listedJson FROM referent")).isEqualTo("[\"t_1\"]")
     }
 
+    @Test
+    fun migrate3To4KeepsRemindersAndAddsPlaces() {
+        helper.createDatabase(NAME_V4, 3).apply {
+            execSQL(
+                "INSERT INTO task (id, title, description, projectId, sortOrder, priority, createdAt, updatedAt, " +
+                    "source) VALUES ('t_1', 'Buy milk', '', 'p_inbox00000', 0, 4, 1, 1, 'typed')",
+            )
+            execSQL(
+                "INSERT INTO reminder (id, taskId, kind, nextFireAt, unseen, createdAt, updatedAt) " +
+                    "VALUES ('r_1', 't_1', 'AT_DUE', 5, 0, 1, 1)",
+            )
+            close()
+        }
+
+        val db = helper.runMigrationsAndValidate(NAME_V4, 4, true, MIGRATION_3_4)
+
+        fun one(sql: String): String? = db.query(sql).use {
+            it.moveToFirst()
+            if (it.isNull(0)) null else it.getString(0)
+        }
+        assertThat(one("SELECT kind || nextFireAt FROM reminder WHERE id = 'r_1'")).isEqualTo("AT_DUE5")
+        assertThat(one("SELECT placeId FROM reminder WHERE id = 'r_1'")).isNull()
+        assertThat(one("SELECT onLeave FROM reminder WHERE id = 'r_1'")).isEqualTo("0")
+        db.execSQL(
+            "INSERT INTO place (id, name, nameKey, lat, lon, radiusM, createdAt) " +
+                "VALUES ('pl_1', 'Shop', 'shop', 51.5, -0.12, 150, 1)",
+        )
+        db.execSQL(
+            "INSERT INTO reminder (id, taskId, kind, placeId, onLeave, unseen, createdAt, updatedAt) " +
+                "VALUES ('r_2', 't_1', 'AT_PLACE', 'pl_1', 1, 0, 1, 1)",
+        )
+        assertThat(one("SELECT name || radiusM FROM place WHERE id = 'pl_1'")).isEqualTo("Shop150")
+        assertThat(one("SELECT placeId || onLeave FROM reminder WHERE id = 'r_2'")).isEqualTo("pl_11")
+    }
+
     private companion object {
+        const val NAME_V4 = "migration-test-v4"
+
         const val NAME_V3 = "migration-test-v3"
 
         const val NAME = "migration-test"

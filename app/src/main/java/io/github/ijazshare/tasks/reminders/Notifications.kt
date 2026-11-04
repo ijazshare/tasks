@@ -60,11 +60,7 @@ object Notifications {
             Log.w(TAG, "reminder due but notifications are off: ${task.title}")
             return
         }
-        context.getSystemService<NotificationManager>()?.createNotificationChannel(
-            NotificationChannel(CHANNEL, "Reminders", NotificationManager.IMPORTANCE_HIGH).apply {
-                description = "Fires when a task with a time comes due."
-            },
-        )
+        createChannel(context)
         val title = task.title.ifEmpty { "Task" }
         val type = AlertType.valueOf(row.kind)
         val missed = kind == Scheduling.Kind.MISSED
@@ -96,6 +92,44 @@ object Notifications {
             }
         buttons.forEach { (label, act) -> builder.addAction(0, label, action(context, task.id, row.id, act)) }
         manager.notify(id(task.id), builder.build())
+    }
+
+    private fun createChannel(context: Context) {
+        context.getSystemService<NotificationManager>()?.createNotificationChannel(
+            NotificationChannel(CHANNEL, "Reminders", NotificationManager.IMPORTANCE_HIGH).apply {
+                description = "Fires when a task with a time comes due."
+            },
+        )
+    }
+
+    /** A place reminder: [said] is "You arrived at X" or "You left X". Done completes the task. */
+    @Suppress("MissingPermission") // areNotificationsEnabled() is checked first; a denial is logged.
+    fun postPlace(context: Context, task: Task, row: Reminder, said: String) {
+        val manager = NotificationManagerCompat.from(context)
+        if (!manager.areNotificationsEnabled()) {
+            Log.w(TAG, "place reminder due but notifications are off: ${task.title}")
+            return
+        }
+        createChannel(context)
+        val open = PendingIntent.getActivity(
+            context,
+            id(task.id),
+            Intent(context, MainActivity::class.java).putExtra(EXTRA_TASK, task.id),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+        manager.notify(
+            id(task.id),
+            NotificationCompat.Builder(context, CHANNEL)
+                .setSmallIcon(R.drawable.ic_notification)
+                .setContentTitle(task.title.ifEmpty { "Task" })
+                .setContentText(said)
+                .setPriority(NotificationCompat.PRIORITY_HIGH)
+                .setCategory(NotificationCompat.CATEGORY_REMINDER)
+                .setContentIntent(open)
+                .setAutoCancel(true)
+                .addAction(0, "Done", action(context, task.id, row.id, ReminderReceiver.ACTION_DONE))
+                .build(),
+        )
     }
 
     /** A distinct PendingIntent per button: same receiver, different action and data. */

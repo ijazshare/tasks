@@ -38,6 +38,7 @@ class FakeStore(
     private val projects: List<ProjectInfo>,
     private val labels: List<String>,
     private var open: List<OpenTask>,
+    private val places: List<String> = emptyList(),
 ) : TaskStore {
     var created: NewTask? = null
     var completed: String? = null
@@ -53,6 +54,7 @@ class FakeStore(
         },
         labels + addedLabels,
         open,
+        places,
     )
 
     override suspend fun create(task: NewTask): String {
@@ -150,7 +152,7 @@ class GoldenTest {
                 OpenTask("t$i", t.jsonPrimitive.content)
             }
         } ?: emptyList()
-        val store = FakeStore(projects, names(first["labels"]), open)
+        val store = FakeStore(projects, names(first["labels"]), open, names(first["places"]))
         val handler = CommandHandler(store)
         var last: Response? = null
         val problems = mutableListOf<String>()
@@ -211,6 +213,8 @@ class GoldenTest {
         check("project", t?.project?.name)
         check("section", t?.project?.section)
         check("labels", t?.labels?.map { it.name }?.sorted())
+        check("place", t?.place?.name)
+        check("on_leave", t?.place?.onLeave)
         check("priority", t?.priority)
         check("deadline", t?.deadline)
         check("description", t?.description?.ifEmpty { null })

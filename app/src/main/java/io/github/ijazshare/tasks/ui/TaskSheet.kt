@@ -50,6 +50,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import io.github.ijazshare.tasks.data.Label
+import io.github.ijazshare.tasks.data.Place
+import io.github.ijazshare.tasks.data.PlaceRef
 import io.github.ijazshare.tasks.data.Repository
 import io.github.ijazshare.tasks.data.Task
 import io.github.ijazshare.tasks.time.DayRule
@@ -93,16 +95,17 @@ fun TaskSheet(
     onClose: () -> Unit,
     prefillTitle: String = "",
 ) {
-    val loaded by produceState<Pair<Task, Set<String>>?>(null, taskId) {
+    val loaded by produceState<Triple<Task, Set<String>, List<PlaceRef>>?>(null, taskId) {
         value = if (taskId == NEW_TASK) {
-            repo.blank(defaultProject).copy(title = prefillTitle) to emptySet()
+            Triple(repo.blank(defaultProject).copy(title = prefillTitle), emptySet(), emptyList())
         } else {
-            repo.task(taskId)?.let { it to repo.tagsOf(taskId) }
+            repo.task(taskId)?.let { Triple(it, repo.tagsOf(taskId), repo.placeRefs(taskId)) }
         }
     }
     val labels by repo.labels().collectAsState(emptyList())
+    val places by repo.places().collectAsState(emptyList())
     val scope = rememberCoroutineScope()
-    val (task, tags) = loaded ?: return
+    val (task, tags, placeRefs) = loaded ?: return
     ModalBottomSheet(
         onDismissRequest = onClose,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
@@ -113,9 +116,9 @@ fun TaskSheet(
             labels,
             taskId == NEW_TASK,
             onClose,
-            onSave = { saved, tagSet ->
+            onSave = { saved, tagSet, placeSet ->
                 scope.launch {
-                    repo.save(saved, tagSet)
+                    repo.save(saved, tagSet, placeSet)
                     onClose()
                 }
             },
@@ -131,6 +134,8 @@ fun TaskSheet(
                     onClose()
                 }
             },
+            places = places,
+            initialPlaces = placeRefs,
         )
     }
 }
@@ -144,9 +149,11 @@ fun TaskEditor(
     labels: List<Label>,
     isNew: Boolean,
     onClose: () -> Unit,
-    onSave: (Task, Set<String>) -> Unit,
+    onSave: (Task, Set<String>, List<PlaceRef>) -> Unit,
     onDelete: () -> Unit,
     onCompleteForever: () -> Unit,
+    places: List<Place> = emptyList(),
+    initialPlaces: List<PlaceRef> = emptyList(),
 ) {
     val context = LocalContext.current
     var title by rememberSaveable { mutableStateOf(task.title) }
@@ -156,6 +163,11 @@ fun TaskEditor(
     // Q3: proposed, unanswered. Floating is the default; this switch makes the time fixed to a zone.
     var keepTime by rememberSaveable { mutableStateOf(task.dueZone != null) }
     var tags by rememberSaveable { mutableStateOf(initialTags.toList()) }
+    // Place reminders as "placeId|1" (1 = on leaving): a string list survives the bundle without a Saver.
+    var placeKeys by rememberSaveable {
+        mutableStateOf(initialPlaces.map { "${it.placeId}|${if (it.onLeave) 1 else 0}" })
+    }
+    var onLeave by rememberSaveable { mutableStateOf(false) }
     val date = epochDay?.let(LocalDate::ofEpochDay)
     var preset by rememberSaveable {
         mutableStateOf(presets(date).indexOfFirst { it.second == task.recurrence }.coerceAtLeast(0))
@@ -189,6 +201,7 @@ fun TaskEditor(
                         recurrenceAnchor = "schedule".takeIf { rule != null },
                     ),
                     tags.toSet(),
+                    placeKeys.map { PlaceRef(it.substringBefore('|'), it.endsWith("|1")) },
                 )
             }) { Text("Save") }
         }
@@ -234,6 +247,36 @@ fun TaskEditor(
                     onClick = { tags = if (l.id in tags) tags - l.id else tags + l.id },
                     label = { Text(l.name) },
                 )
+            }
+        }
+        Text("Place reminder", style = MaterialTheme.typography.labelLarge)
+        if (places.isEmpty()) {
+            Text(
+                "Save a place under Menu, Places to be reminded when you arrive or leave.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        } else {
+            placeKeys.forEach { k ->
+                val p = places.firstOrNull { it.id == k.substringBefore('|') } ?: return@forEach
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        "When I ${if (k.endsWith("|1")) "leave" else "arrive at"} ${p.name}",
+                        Modifier.weight(1f),
+                    )
+                    TextButton(onClick = { placeKeys = placeKeys - k }) { Text("Remove") }
+                }
+            }
+            ChipRow(listOf("When I arrive at", "When I leave"), if (onLeave) 1 else 0, true) { onLeave = it == 1 }
+            Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                places.forEach { p ->
+                    val key = "${p.id}|${if (onLeave) 1 else 0}"
+                    FilterChip(
+                        selected = key in placeKeys,
+                        onClick = { placeKeys = if (key in placeKeys) placeKeys - key else placeKeys + key },
+                        label = { Text(p.name) },
+                    )
+                }
             }
         }
         if (!isNew) {

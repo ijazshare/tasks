@@ -73,6 +73,7 @@ import io.github.ijazshare.tasks.ui.HaloFab
 import io.github.ijazshare.tasks.ui.MenuScreen
 import io.github.ijazshare.tasks.ui.NEW_TASK
 import io.github.ijazshare.tasks.ui.NavStack
+import io.github.ijazshare.tasks.ui.PlacesScreen
 import io.github.ijazshare.tasks.ui.RootBar
 import io.github.ijazshare.tasks.ui.RootHeader
 import io.github.ijazshare.tasks.ui.Route
@@ -353,6 +354,11 @@ private fun TasksApp(
                     Route.Setup -> {
                         ScreenBar("Setup", onBack = back)
                         SetupScreen(resumes)
+                    }
+
+                    Route.Places -> {
+                        ScreenBar("Places", onBack = back)
+                        PlacesScreen(repo)
                     }
 
                     Route.Console -> {
