@@ -8,6 +8,17 @@ plugins {
     alias(libs.plugins.ksp)
 }
 
+// Release signing comes from environment variables in CI (see release.yml). Without them the
+// release build is simply unsigned, so a fresh clone still builds.
+val signingEnv = listOf(
+    "SIGNING_KEYSTORE_PATH",
+    "SIGNING_KEYSTORE_PASSWORD",
+    "SIGNING_KEY_ALIAS",
+    "SIGNING_KEY_PASSWORD",
+)
+    .map { System.getenv(it) }
+val hasReleaseSigning = signingEnv.all { !it.isNullOrBlank() }
+
 android {
     namespace = "io.github.ijazshare.tasks"
     compileSdk = libs.versions.compileSdk.get().toInt()
@@ -25,6 +36,17 @@ android {
     // MigrationTestHelper reads the exported schemas (1.json, 2.json) as test assets.
     sourceSets.getByName("androidTest").assets.directories.add("$projectDir/schemas")
 
+    signingConfigs {
+        if (hasReleaseSigning) {
+            create("release") {
+                storeFile = file(signingEnv[0]!!)
+                storePassword = signingEnv[1]
+                keyAlias = signingEnv[2]
+                keyPassword = signingEnv[3]
+            }
+        }
+    }
+
     buildTypes {
         debug {
             applicationIdSuffix = ".debug"
@@ -35,6 +57,7 @@ android {
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"))
+            if (hasReleaseSigning) signingConfig = signingConfigs.getByName("release")
         }
     }
 
