@@ -27,7 +27,12 @@ import java.time.ZonedDateTime
 // conversations (4.7) and the speech rules (4.5.4). Conversations and referents live in memory here;
 // the IPC layer (ipc/Commands.kt) persists them in Room by replaying the answers.
 
-data class Snapshot(val projects: List<ProjectInfo>, val labels: List<String>, val openTasks: List<OpenTask>)
+data class Snapshot(
+    val projects: List<ProjectInfo>,
+    val labels: List<String>,
+    val openTasks: List<OpenTask>,
+    val places: List<String> = emptyList(),
+)
 
 data class NewTask(
     val title: String,
@@ -43,6 +48,7 @@ data class NewTask(
     val labels: List<LabelRef>,
     val source: String,
     val utterance: String,
+    val place: PlaceTarget? = null,
 )
 
 /** What the handler needs from storage; [RoomStore] is the real one, the golden test has a fake. */
@@ -153,9 +159,38 @@ class CommandHandler(private val store: TaskStore, private val settings: ParseSe
                 convs.remove(req.client)
                 val text = req.utterance.orEmpty()
                 val ctx = ctxOf()
+                PlaceClause.read(text, snap.places)?.let { return placeReminder(req, it, text, ctx) }
                 scan(text, ctx).let { dispatch(req, ctx, it, Decider.decide(it, ctx), 0) }
             }
         }
+    }
+
+    /** "Remind me to X when I get to <place>": one task with a place reminder, or a decline for an unsaved place. */
+    private suspend fun placeReminder(req: Request, c: PlaceClause, text: String, ctx: ParseContext): Response {
+        val target = c.target
+            ?: return Response(
+                "declined",
+                "I don't know where ${c.said} is yet. Save it in Tasks under Places first.",
+                Intent.CREATE,
+            )
+        val title = c.title.replaceFirstChar { it.uppercase() }
+        val id = store.create(
+            NewTask(
+                title, "",
+                ProjectRef(
+                    "Inbox",
+                ),
+                4, null, null, false, null, null, null, emptyList(), if (req.typed) "typed" else "voice", text, target,
+            ),
+        )
+        remember(req.client, id, ctx.now.toInstant())
+        return Response(
+            "done",
+            "Okay. I'll remind you to ${c.title} ${c.whenSay()}.",
+            Intent.CREATE,
+            taskId = id,
+            effect = "created",
+        )
     }
 
     private suspend fun followUp(req: Request, ctxOf: () -> ParseContext): Response {

@@ -65,6 +65,31 @@ class Repository(private val context: Context) {
 
     fun reminders(): Flow<List<Reminder>> = dao.reminders()
 
+    fun places(): Flow<List<Place>> = db.places().live()
+
+    /** The live place reminders of [taskId], for the editor. */
+    suspend fun placeRefs(taskId: String): List<PlaceRef> =
+        dao.remindersOf(taskId).filter { it.kind == AT_PLACE && it.deletedAt == null }
+            .mapNotNull { r -> r.placeId?.let { PlaceRef(it, r.onLeave) } }
+
+    /** Saves [name] at the given spot; false if the name is blank or already taken. */
+    suspend fun addPlace(name: String, lat: Double, lon: Double): Boolean = db.withTransaction {
+        val key = name.trim().lowercase()
+        if (key.isEmpty() || db.places().byKey(key) != null) return@withTransaction false
+        db.places().insert(Place(newId("pl_"), name.trim(), key, lat, lon, PLACE_RADIUS_M, Instant.now(), null))
+        true
+    }
+
+    /** Deleting a place drops the reminders that point at it; their tasks stay. */
+    suspend fun deletePlace(id: String) {
+        val now = Instant.now()
+        db.withTransaction {
+            db.places().softDelete(id, now)
+            db.places().dropReminders(id, now)
+        }
+        scheduler.rearm()
+    }
+
     suspend fun tagsOf(taskId: String): Set<String> = dao.labelIdsOf(taskId).toSet()
 
     fun inProject(projectId: String): Flow<List<Task>> = dao.inProject(projectId)
@@ -124,7 +149,7 @@ class Repository(private val context: Context) {
      * occurrence at or after now (8.2). Reminder rows are re-derived (8.6) when the due, the rule
      * or the [tags] (label ids; null = unchanged) change. An alert already past counts as skipped.
      */
-    suspend fun save(task: Task, tags: Set<String>? = null) {
+    suspend fun save(task: Task, tags: Set<String>? = null, places: List<PlaceRef>? = null) {
         val now = Instant.now()
         val zone = ZoneId.systemDefault()
         db.withTransaction {
@@ -145,8 +170,24 @@ class Repository(private val context: Context) {
             dao.deleteFts(t.id)
             dao.insertFts(t.id, t.title)
             if (changed || tagsChanged) rederive(t, now, zone, reset = changed)
+            places?.let { syncPlaces(t.id, it, now) }
         }
         scheduler.rearm()
+    }
+
+    /** Makes the task's live place reminders exactly [want]; ones already there (fired or not) are kept. */
+    private suspend fun syncPlaces(taskId: String, want: List<PlaceRef>, now: Instant) {
+        val rows = dao.remindersOf(taskId).filter { it.kind == AT_PLACE && it.deletedAt == null }
+        val keep = rows.filter { r -> want.any { it.placeId == r.placeId && it.onLeave == r.onLeave } }
+        dao.upsert((rows - keep.toSet()).map { it.copy(deletedAt = now, updatedAt = now) })
+        dao.upsert(
+            want.distinct().filter { w -> keep.none { it.placeId == w.placeId && it.onLeave == w.onLeave } }.map {
+                Reminder(
+                    newId("r_"), taskId, AT_PLACE, null, null, null, null, null, null, null, null, false, now, now,
+                    null, it.placeId, it.onLeave,
+                )
+            },
+        )
     }
 
     /** Stores [tags] (null = leave alone); true if they differ from what was there. */
@@ -257,8 +298,13 @@ class Repository(private val context: Context) {
 
     private fun Alert.matches(r: Reminder) = type.name == r.kind && offsetMin == r.offsetMin
 
-    private suspend fun softDeleteReminders(taskId: String, now: Instant) {
-        dao.upsert(dao.remindersOf(taskId).map { it.copy(deletedAt = now, unseen = false, updatedAt = now) })
+    /** [keepPlaces]: leave the place reminders alone (a task losing its due date still has its places). */
+    private suspend fun softDeleteReminders(taskId: String, now: Instant, keepPlaces: Boolean = false) {
+        dao.upsert(
+            dao.remindersOf(taskId).filter {
+                !keepPlaces || it.kind != AT_PLACE
+            }.map { it.copy(deletedAt = now, unseen = false, updatedAt = now) },
+        )
     }
 
     /**
@@ -266,11 +312,11 @@ class Repository(private val context: Context) {
      * match keep their state (fired, snoozed, unseen) unless [reset]; the rest are replaced.
      */
     private suspend fun rederive(t: Task, now: Instant, zone: ZoneId, reset: Boolean) {
-        val due = t.due() ?: return softDeleteReminders(t.id, now)
+        val due = t.due() ?: return softDeleteReminders(t.id, now, keepPlaces = true)
         val schedule = Schedule.pick(dao.schedules(t.id).mapNotNull { Schedule.parse(it.scheduleJson) })
         val repeating = t.recurrence != null
         val all = Reminders.candidates(due, repeating, schedule, zone)
-        val rows = dao.remindersOf(t.id)
+        val rows = dao.remindersOf(t.id).filter { it.kind != AT_PLACE }
         val upcoming = Reminders.upcoming(due, repeating, schedule, now, zone)
         // A row stays if it is still one of this task's alerts and either is history, is overdue
         // for delivery (a Missed one), or is still wanted; a pending alert the tags dropped goes.
@@ -294,5 +340,6 @@ class Repository(private val context: Context) {
 
     private companion object {
         const val PRIORITY_NONE = 4
+        const val PLACE_RADIUS_M = 150
     }
 }

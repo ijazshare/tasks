@@ -12,6 +12,7 @@ package io.github.ijazshare.tasks.reminders
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.location.LocationManager
 import android.util.Log
 import io.github.ijazshare.tasks.data.Repository
 import kotlinx.coroutines.CoroutineScope
@@ -66,6 +67,15 @@ class ReminderReceiver : BroadcastReceiver() {
         const val ACTION_SNOOZE_60 = "io.github.ijazshare.tasks.REMINDER_SNOOZE_60"
         const val ACTION_TOMORROW = "io.github.ijazshare.tasks.REMINDER_TOMORROW"
         const val ACTION_DISMISS = "io.github.ijazshare.tasks.REMINDER_DISMISS"
+    }
+}
+
+/** The platform's proximity alert for a place reminder (see [PlaceAlerts]). */
+class PlaceReceiver : BroadcastReceiver() {
+    override fun onReceive(context: Context, intent: Intent) {
+        val id = intent.getStringExtra(ReminderReceiver.EXTRA_REMINDER) ?: return
+        val entering = intent.getBooleanExtra(LocationManager.KEY_PROXIMITY_ENTERING, true)
+        async { PlaceAlerts(context).fire(id, entering) }
     }
 }
 

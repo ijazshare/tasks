@@ -259,7 +259,7 @@ class ScreenshotsTest {
                 labels,
                 false,
                 {},
-                { _, _ -> },
+                { _, _, _ -> },
                 {},
                 {},
             )

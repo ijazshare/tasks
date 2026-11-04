@@ -89,6 +89,7 @@ class ReminderScheduler(private val context: Context) {
                 Notifications.post(context, shown.task, shown.kind, shown.row, shown.schedule)
             }
             arm(next)
+            PlaceAlerts(context).rearm()
         }
     }
 

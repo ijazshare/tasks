@@ -247,6 +247,7 @@ fun MenuScreen(
         ScreenBar("Menu", onBack = onBack)
         MenuRow("Missed", missed.takeIf { it > 0 }?.toString(), TasksColors.Relevant) { onOpen(Route.Missed) }
         MenuRow("Completed") { onOpen(Route.Completed) }
+        MenuRow("Places") { onOpen(Route.Places) }
         MenuRow(
             "Setup",
             if (setupOk) "All set" else "Needs attention",

@@ -15,6 +15,7 @@ import android.content.Context
 import io.github.ijazshare.tasks.data.INBOX_ID
 import io.github.ijazshare.tasks.data.Journal
 import io.github.ijazshare.tasks.data.Label
+import io.github.ijazshare.tasks.data.PlaceRef
 import io.github.ijazshare.tasks.data.Repository
 import io.github.ijazshare.tasks.data.Snap
 import io.github.ijazshare.tasks.data.Task
@@ -87,6 +88,7 @@ class RoomStore(context: Context, private val repo: Repository = Repository(cont
                     (it.dueDate ?: today) < today,
                 )
             },
+            db.places().all().map { it.name },
         )
     }
 
@@ -114,7 +116,8 @@ class RoomStore(context: Context, private val repo: Repository = Repository(cont
             durationMin = task.durationMin, createdAt = now, updatedAt = now, source = task.source, sourceUtterance = task.utterance,
         )
         val tags = task.labels.mapNotNull { dao.labelByKey(it.name.lowercase())?.id }.toSet()
-        repo.save(t, tags)
+        val place = task.place?.let { p -> db.places().byKey(p.name.lowercase())?.let { PlaceRef(it.id, p.onLeave) } }
+        repo.save(t, tags, place?.let(::listOf))
         before[t.id] = null
         return t.id
     }
