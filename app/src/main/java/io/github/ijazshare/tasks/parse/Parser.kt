@@ -251,7 +251,7 @@ private val reFrac = Regex("\\b(?:(?:at|by) )?(?:a )?(half|quarter) (past|to) ($
 private val reColon =
     Regex("\\b(?:(?:at|by|around|about) )?(\\d{1,3}):(\\d{2})\\b(?:\\s?(am|pm|a\\.m\\.|p\\.m\\.))?$QUAL")
 private val reAmPm =
-    Regex("\\b(?:(?:at|by|around|about) )?(\\d{1,2}|$NUMW)(?::(\\d{2}))?\\s?(am|pm|a\\.m\\.|p\\.m\\.)(?![a-z])")
+    Regex("\\b(?:(?:at|by|around|about) )?(\\d{1,2}|$NUMW)(?:[:. ](\\d{2}))?\\s?(am|pm|a\\.m\\.|p\\.m\\.)(?![a-z])")
 private val reOclock = Regex("\\b(?:at )?($NUM) o'?clock\\b$QUAL")
 private val reAtBare = Regex("\\bat (\\d{1,2}|$NUMW)(?:[ .](\\d{2}))?\\b(?![:.]\\d)(?!\\s?(?:st|nd|rd|th)\\b)$QUAL")
 private val reInPart = Regex("\\bin the (morning|afternoon|evening)\\b")

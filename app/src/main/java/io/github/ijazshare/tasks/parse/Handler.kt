@@ -153,7 +153,14 @@ class CommandHandler(private val store: TaskStore, private val settings: ParseSe
                 convs.remove(req.client)
                 val text = req.utterance.orEmpty()
                 val ctx = ctxOf()
-                scan(text, ctx).let { dispatch(req, ctx, it, Decider.decide(it, ctx), 0) }
+                val parts = splitReminders(text)
+                if (parts.size >
+                    1
+                ) {
+                    several(req, ctx, parts)
+                } else {
+                    scan(text, ctx).let { dispatch(req, ctx, it, Decider.decide(it, ctx), 0) }
+                }
             }
         }
     }
@@ -246,6 +253,31 @@ class CommandHandler(private val store: TaskStore, private val settings: ParseSe
         is Verdict.Decline -> Response("declined", v.speech, r.intent, parse = r)
         is Verdict.Ask -> ask(req, ctx, v.question, round, r)
         Verdict.Done -> execute(req, ctx, d, r)
+    }
+
+    /**
+     * "Remind me at 11 to A and remind me at 12 to B": each reminder is decided on its own. The clear ones
+     * are added; the first unclear one gets the usual question, and any others are named so they can be said again.
+     * Falls back to the whole sentence when a part is not a new task ("text Amira and remind me ...").
+     */
+    // ponytail: a date said once ("tomorrow at 11 ... and remind me at 12 ...") is not carried to the later parts.
+    private suspend fun several(req: Request, ctx: ParseContext, parts: List<String>): Response {
+        val each = parts.map { p -> scan(p, ctx).let { it to Decider.decide(it, ctx) } }
+        if (each.any { it.second.intent != Intent.CREATE }) {
+            return scan(req.utterance.orEmpty(), ctx).let { dispatch(req, ctx, it, Decider.decide(it, ctx), 0) }
+        }
+        val (ready, unsure) = each.partition { it.second.verdict == Verdict.Done }
+        val made = ready.map { (d, r) -> execute(req, ctx, d, r) }
+        val said = made.mapIndexed { i, m -> if (i == 0) m.speech else m.speech.removePrefix("Okay. ") }.toMutableList()
+        val (d, r) = unsure.firstOrNull() ?: return made.last().copy(speech = said.joinToString(" "))
+        unsure.drop(1).mapNotNull { it.second.title }.takeIf { it.isNotEmpty() }?.let { left ->
+            said += "I left out ${left.joinToString(" and ") { lcFirstTitle(it) }}; say that again after this."
+        }
+        val asked = dispatch(req, ctx, d, r, 0)
+        val about = r.title?.takeIf { made.isNotEmpty() && asked.speech.isNotEmpty() }
+        val question =
+            about?.let { "For ${lcFirstTitle(it)}, ${asked.speech.replaceFirstChar(Char::lowercase)}" } ?: asked.speech
+        return asked.copy(speech = (said + question).joinToString(" "))
     }
 
     // ---- executing ------------------------------------------------------------------------------------
@@ -574,6 +606,13 @@ class CommandHandler(private val store: TaskStore, private val settings: ParseSe
 
 private val STOP =
     setOf("a", "an", "the", "my", "to", "at", "on", "in", "for", "of", "about", "with", "task", "reminder", "list")
+
+private val reAnotherReminder =
+    Regex("[,.;]?\\s+(?:and then |and also |and |also |then )?(?=remind me\\b)", RegexOption.IGNORE_CASE)
+
+/** "Remind me ... and remind me ...": one part per "remind me" after the first. */
+internal fun splitReminders(text: String): List<String> =
+    text.split(reAnotherReminder).map { it.trim(' ', ',', '.', ';') }.filter { it.isNotEmpty() }
 
 internal fun tokens(s: String): Set<String> = work(s).replace(Regex("['’]s\\b"), "").split(Regex("[^\\p{L}\\p{N}]+"))
     .filter { it.isNotEmpty() && it !in STOP }.map(::tokenStem).toSet()
